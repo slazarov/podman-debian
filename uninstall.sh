@@ -111,3 +111,9 @@ rm -rf /opt/go/*
 rm -rf /etc/cni
 
 rm -rf /etc/containers
+
+rm -f /usr/lib/systemd/system/podman*
+
+remove_if_user_installed "/usr/bin/podman"
+remove_if_user_installed "/usr/bin/podman-remote"
+remove_if_user_installed "/usr/bin/podmansh"

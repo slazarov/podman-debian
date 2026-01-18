@@ -99,3 +99,18 @@ log_component() {
         echo "Update ${lcomponent} from Version ${loldversion} to Version ${lnewversion}" >> "${toolpath}/log/${ltimestamp}.log"
     fi
 }
+
+
+remove_if_user_installed() {
+    # Input Arguments
+    local lfile="$1"
+
+    # Try to see if it was installed using Package Manager
+    dpkg --search "${lfile}" 2>&1 > /dev/null
+
+    # If not delete File
+    if [[ $? -eq 1 ]]
+    then
+        rm -f "${lfile}"
+    fi
+}
