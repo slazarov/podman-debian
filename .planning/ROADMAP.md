@@ -28,13 +28,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. User can run install.sh on an amd64 system and Podman compiles successfully (existing behavior preserved)
   3. All toolchain installers (Go, Protoc, Rust) download architecture-appropriate binaries automatically
   4. A single variable in config.sh controls architecture selection for the entire build
-**Plans**: TBD
+**Plans**: 4 plans in 2 waves
 
 Plans:
-- [ ] 01-01: Detect system architecture and expose variants
-- [ ] 01-02: Update Go installer for ARM64 support
-- [ ] 01-03: Update Protoc installer for ARM64 support
-- [ ] 01-04: Update Rust installer for ARM64 support
+- [ ] 01-01-PLAN.md — Add architecture detection and vendor mappings to config.sh.example
+- [ ] 01-02-PLAN.md — Update Go installer for ARM64 support
+- [ ] 01-03-PLAN.md — Update Protoc installer for ARM64 support
+- [ ] 01-04-PLAN.md — Update Rust installer for ARM64 support
 
 ### Phase 2: Non-Interactive Mode
 **Goal**: The installation completes without any user interaction or blocking prompts
@@ -91,7 +91,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Architecture Support | 0/4 | Not started | - |
+| 1. Architecture Support | 0/4 | Ready to execute | - |
 | 2. Non-Interactive Mode | 0/4 | Not started | - |
 | 3. Error Handling | 0/3 | Not started | - |
 | 4. User Experience | 0/3 | Not started | - |
