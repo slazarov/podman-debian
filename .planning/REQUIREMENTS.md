@@ -68,22 +68,22 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ARCH-01 | Phase 1 | Pending |
-| ARCH-02 | Phase 1 | Pending |
-| ARCH-03 | Phase 1 | Pending |
-| ARCH-04 | Phase 1 | Pending |
-| ARCH-05 | Phase 1 | Pending |
-| NINT-01 | Phase 2 | Pending |
-| NINT-02 | Phase 2 | Pending |
-| NINT-03 | Phase 2 | Pending |
-| NINT-04 | Phase 2 | Pending |
-| ERRO-01 | Phase 3 | Pending |
-| ERRO-02 | Phase 3 | Pending |
-| ERRO-03 | Phase 3 | Pending |
-| ERRO-04 | Phase 3 | Pending |
-| UX-01 | Phase 4 | Pending |
-| UX-02 | Phase 4 | Pending |
-| UX-03 | Phase 4 | Pending |
+| ARCH-01 | Phase 1: Architecture Support | Pending |
+| ARCH-02 | Phase 1: Architecture Support | Pending |
+| ARCH-03 | Phase 1: Architecture Support | Pending |
+| ARCH-04 | Phase 1: Architecture Support | Pending |
+| ARCH-05 | Phase 1: Architecture Support | Pending |
+| NINT-01 | Phase 2: Non-Interactive Mode | Pending |
+| NINT-02 | Phase 2: Non-Interactive Mode | Pending |
+| NINT-03 | Phase 2: Non-Interactive Mode | Pending |
+| NINT-04 | Phase 2: Non-Interactive Mode | Pending |
+| ERRO-01 | Phase 3: Error Handling | Pending |
+| ERRO-02 | Phase 3: Error Handling | Pending |
+| ERRO-03 | Phase 3: Error Handling | Pending |
+| ERRO-04 | Phase 3: Error Handling | Pending |
+| UX-01 | Phase 4: User Experience | Pending |
+| UX-02 | Phase 4: User Experience | Pending |
+| UX-03 | Phase 4: User Experience | Pending |
 
 **Coverage:**
 - v1 requirements: 16 total
@@ -92,4 +92,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2025-02-28*
-*Last updated: 2025-02-28 after initial definition*
+*Last updated: 2026-02-28 after roadmap creation*
