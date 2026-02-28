@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Abort on Error
-set -e
+# Strict Mode - Exit on error, undefined vars, pipe failures
+set -euo pipefail
 
 # Determine toolpath if not set already
 relativepath="../" # Define relative path to go from this script to the root level of the tool
@@ -12,6 +12,9 @@ source "${toolpath}/config.sh"
 
 # Load Functions
 source "${toolpath}/functions.sh"
+
+# Set error trap AFTER sourcing
+trap 'error_handler $? $LINENO "$BASH_SOURCE"' ERR
 
 # Download Rustup for detected architecture
 wget "https://static.rust-lang.org/rustup/dist/${RUSTUP_ARCH}/rustup-init" -O rustup-init
