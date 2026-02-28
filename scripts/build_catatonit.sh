@@ -29,9 +29,11 @@ git_checkout "${CATATONIT_TAG}"
 # Log Component
 log_component "catatonit"
 
-# Create m4 directory to fix libtoolize auxiliary directory detection
-# Without this, libtoolize puts ltmain.sh in ../.. instead of ./
-# because catatonit's configure.ac lacks AC_CONFIG_AUX_DIR
+# Note: The main fix for libtoolize aux directory detection was renaming
+# install.sh to setup.sh in the repo root. The file "install.sh" was being
+# detected by libtoolize as an autotools auxiliary file (similar to "install-sh"),
+# causing it to put ltmain.sh in ../.. instead of ./
+# The m4 directory is created as an extra safeguard.
 mkdir -p m4
 
 # Build
