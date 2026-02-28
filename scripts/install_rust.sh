@@ -13,9 +13,8 @@ source "${toolpath}/config.sh"
 # Load Functions
 source "${toolpath}/functions.sh"
 
-#curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-wget https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init -O rustup-init
+# Download Rustup for detected architecture
+wget "https://static.rust-lang.org/rustup/dist/${RUSTUP_ARCH}/rustup-init" -O rustup-init
 chmod +x rustup-init
 
 ./rustup-init
