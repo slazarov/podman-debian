@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Architecture Support** - Enable Podman compilation on both amd64 and ARM64 systems
 - [ ] **Phase 2: Non-Interactive Mode** - Remove all blocking prompts for unattended installation
-- [ ] **Phase 3: Error Handling** - Ensure scripts fail loudly and clearly on any error
+- [x] **Phase 3: Error Handling** - Ensure scripts fail loudly and clearly on any error
 - [ ] **Phase 4: User Experience** - Provide progress feedback and operational confidence
 
 ## Phase Details
@@ -59,12 +59,12 @@ Plans:
   2. Error output identifies which script and operation failed
   3. install.sh shows clear summary when sub-scripts fail
   4. All scripts consistently use `set -e` (or `set -euo pipefail`)
-**Plans**: TBD
+**Plans**: 3 plans in 3 waves
 
 Plans:
-- [ ] 03-01: Enable set -e consistently across all scripts
-- [ ] 03-02: Add error trap handlers with context
-- [ ] 03-03: Propagate errors properly in install.sh
+- [ ] 03-01-PLAN.md — Add error_handler to functions.sh and enable strict mode in install.sh (foundation)
+- [ ] 03-02-PLAN.md — Update installer scripts (install_*.sh, build_aardvark_dns.sh) with strict mode and traps
+- [ ] 03-03-PLAN.md — Update build scripts (build_*.sh) with strict mode and add run_script wrapper to install.sh
 
 ### Phase 4: User Experience
 **Goal**: User has visibility into build progress and confidence in script operations
@@ -89,6 +89,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Architecture Support | 4/4 | Complete | 01-01, 01-02, 01-03, 01-04 |
-| 2. Non-Interactive Mode | 1/4 | In progress | 02-01 |
-| 3. Error Handling | 0/3 | Not started | - |
+| 2. Non-Interactive Mode | 1/1 | Complete | 02-01 |
+| 3. Error Handling | 0/3 | Planned | - |
 | 4. User Experience | 0/3 | Not started | - |
