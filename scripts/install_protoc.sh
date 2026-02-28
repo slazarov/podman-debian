@@ -16,11 +16,8 @@ source "${toolpath}/functions.sh"
 # Set error trap AFTER sourcing
 trap 'error_handler $? $LINENO "$BASH_SOURCE"' ERR
 
-# Auto-detect latest protoc version if not specified
-if [[ -z "${PROTOC_VERSION:-}" ]]; then
-    export PROTOC_VERSION=$(get_latest_protoc_version)
-    echo "Auto-detected protoc version: ${PROTOC_VERSION}"
-fi
+# Auto-detection now happens in config.sh
+# This script can be run directly or sourced by other scripts
 
 # Derive PROTOC_TAG from PROTOC_VERSION if not set
 if [[ -z "${PROTOC_TAG:-}" ]]; then
