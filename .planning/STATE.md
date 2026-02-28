@@ -83,7 +83,7 @@ None yet.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
-| 1 | Make CRUN use latest available version if CRUN_TAG not specified | 2026-02-28 | 9edebe1 | [1-make-crun-use-latest-available-version-i](./quick/1-make-crun-use-latest-available-version-i/) |
+| 1 | Make CRUN use latest available version if CRUN_TAG not specified | 2026-02-28 | 502a9be | [1-make-crun-use-latest-available-version-i](./quick/1-make-crun-use-latest-available-version-i/) |
 
 ## Session Continuity
 
