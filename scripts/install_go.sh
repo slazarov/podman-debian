@@ -16,6 +16,11 @@ source "${toolpath}/functions.sh"
 # Create Folders
 mkdir -p ${GOROOT}
 
-# Download a Binary Distribution
-wget https://go.dev/dl/${GOTAG}.linux-amd64.tar.gz -O ${GOTAG}.linux-amd64.tar.gz
-tar xvf ${GOTAG}.linux-amd64.tar.gz --strip-components=1 -C ${GOROOT}
+# Download Go for detected architecture
+wget "https://go.dev/dl/${GOTAG}.linux-${GOARCH}.tar.gz" -O go.tar.gz
+
+# Extract
+tar -xzf go.tar.gz
+
+# Move to destination (Go tarball extracts to 'go' directory)
+mv go "${GOROOT}"
