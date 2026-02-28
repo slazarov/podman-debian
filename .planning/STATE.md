@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2025-02-28)
 Phase: 4 of 4 (User Experience)
 Plan: 0 of 3 in current phase
 Status: In progress
-Last activity: 2026-02-28 - Plan 03-03 completed, Phase 3 complete
+Last activity: 2026-02-28 - Completed quick task 1: Make CRUN use latest available version if CRUN_TAG not specified
 
 Progress: [############-] 57%
 
@@ -79,8 +79,14 @@ None yet.
 
 None yet.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 1 | Make CRUN use latest available version if CRUN_TAG not specified | 2026-02-28 | 9edebe1 | [1-make-crun-use-latest-available-version-i](./quick/1-make-crun-use-latest-available-version-i/) |
+
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed quick-1 (CRUN latest version detection)
+Stopped at: Completed quick-1 (CRUN latest version detection pattern)
 Resume file: None
