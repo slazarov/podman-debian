@@ -13,11 +13,12 @@ source "${toolpath}/config.sh"
 # Load Functions
 source "${toolpath}/functions.sh"
 
-# Download Protoc
-wget https://github.com/protocolbuffers/protobuf/releases/download/${PROTOC_TAG}/protoc-${PROTOC_VERSION}-linux-x86_64.zip -O protoc-${PROTOC_VERSION}-linux-x86_64.zip
+# Download Protoc for detected architecture
+wget "https://github.com/protocolbuffers/protobuf/releases/download/${PROTOC_TAG}/protoc-${PROTOC_VERSION}-linux-${PROTOC_ARCH}.zip" -O protoc.zip
 
-mkdir -p ${PROTOC_ROOT_FOLDER}/${PROTOC_VERSION}
-unzip protoc-${PROTOC_VERSION}-linux-x86_64.zip -d ${PROTOC_ROOT_FOLDER}/${PROTOC_VERSION}
+# Extract
+mkdir -p "${PROTOC_ROOT_FOLDER}/${PROTOC_VERSION}"
+unzip protoc.zip -d "${PROTOC_ROOT_FOLDER}/${PROTOC_VERSION}"
 
 # Required Fix otherwise go complains about 1.22.6 vs 1.23 mismatch
 export PATH="${PROTOC_PATH}:${PATH}"
