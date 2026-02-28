@@ -34,7 +34,7 @@ Plans:
 - [x] 01-01-PLAN.md — Add architecture detection and vendor mappings to config.sh.example
 - [x] 01-02-PLAN.md — Update Go installer for ARM64 support
 - [x] 01-03-PLAN.md — Update Protoc installer for ARM64 support
-- [ ] 01-04-PLAN.md — Update Rust installer for ARM64 support
+- [x] 01-04-PLAN.md — Update Rust installer for ARM64 support
 
 ### Phase 2: Non-Interactive Mode
 **Goal**: The installation completes without any user interaction or blocking prompts
@@ -48,7 +48,7 @@ Plans:
 **Plans**: 1 plan in 1 wave
 
 Plans:
-- [ ] 02-01-PLAN.md — Enable fully non-interactive installation (DEBIAN_FRONTEND + rustup -y + verification)
+- [x] 02-01-PLAN.md — Enable fully non-interactive installation (DEBIAN_FRONTEND + rustup -y + verification)
 
 ### Phase 3: Error Handling
 **Goal**: Any error immediately stops execution with a clear message identifying what failed
@@ -88,7 +88,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Architecture Support | 3/4 | In progress | 01-01, 01-02, 01-03 |
-| 2. Non-Interactive Mode | 0/1 | Not started | - |
+| 1. Architecture Support | 4/4 | Complete | 01-01, 01-02, 01-03, 01-04 |
+| 2. Non-Interactive Mode | 1/4 | In progress | 02-01 |
 | 3. Error Handling | 0/3 | Not started | - |
 | 4. User Experience | 0/3 | Not started | - |

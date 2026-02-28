@@ -17,10 +17,10 @@ Requirements for ARM support and non-interactive installation.
 
 ### Non-Interactive Mode
 
-- [ ] **NINT-01**: All apt commands use DEBIAN_FRONTEND=noninteractive
-- [ ] **NINT-02**: All apt commands use -y flag (no confirmation prompts)
-- [ ] **NINT-03**: No script uses `read` or other blocking input
-- [ ] **NINT-04**: Package configuration prompts pre-answered (debconf-set-selections where needed)
+- [x] **NINT-01**: All apt commands use DEBIAN_FRONTEND=noninteractive
+- [x] **NINT-02**: All apt commands use -y flag (no confirmation prompts)
+- [x] **NINT-03**: No script uses `read` or other blocking input
+- [x] **NINT-04**: Package configuration prompts pre-answered (debconf-set-selections where needed)
 
 ### Error Handling
 
@@ -73,10 +73,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ARCH-03 | Phase 1: Architecture Support | Complete |
 | ARCH-04 | Phase 1: Architecture Support | Complete |
 | ARCH-05 | Phase 1: Architecture Support | Complete |
-| NINT-01 | Phase 2: Non-Interactive Mode | Pending |
-| NINT-02 | Phase 2: Non-Interactive Mode | Pending |
-| NINT-03 | Phase 2: Non-Interactive Mode | Pending |
-| NINT-04 | Phase 2: Non-Interactive Mode | Pending |
+| NINT-01 | Phase 2: Non-Interactive Mode | Complete |
+| NINT-02 | Phase 2: Non-Interactive Mode | Complete |
+| NINT-03 | Phase 2: Non-Interactive Mode | Complete |
+| NINT-04 | Phase 2: Non-Interactive Mode | Complete |
 | ERRO-01 | Phase 3: Error Handling | Pending |
 | ERRO-02 | Phase 3: Error Handling | Pending |
 | ERRO-03 | Phase 3: Error Handling | Pending |
