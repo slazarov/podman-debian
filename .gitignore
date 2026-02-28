@@ -21,3 +21,23 @@ log/
 
 # Ignore Configuration
 config.sh
+
+# Development / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude Code / GSD
+.claude/
+.planning/
+CLAUDE.md
+
+# Codanna / MCP
+.codanna/
+.codannaignore
+.mcp.json
+.fastembed_cache
+
+# Generated files
+ltmain.sh
