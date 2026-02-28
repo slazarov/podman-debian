@@ -21,9 +21,9 @@ decisions:
   - Use consistent ${TAG:-} pattern across all components for version handling
   - Update regex to handle both v-prefixed and numeric-only tag formats
 metrics:
-  duration: 1 min
+  duration: 5 min
   completed_date: 2026-02-28
-  commits: 2
+  commits: 3
   files_modified: 2
 ---
 
@@ -67,12 +67,23 @@ Modified the regex in `get_latest_tag()` function to match both tag formats:
 latest=$(git tag --list --sort -creatordate | grep -v rc | grep -E ^v | sort --reverse --version-sort | head -n1)
 ```
 
-**After:**
+**After (initial):**
 ```bash
 latest=$(git tag --list --sort -creatordate | grep -v rc | grep -E '^(v)?[0-9]' | sort --reverse --version-sort | head -n1)
 ```
 
-The regex `^(v)?[0-9]` now matches:
+**After (final fix):**
+```bash
+# Handle both v-prefixed (v5.5.2) and numeric-only (1.26) tags
+# Sort by version (stripping v prefix for comparison) while preserving original tag name
+latest=$(git tag --list --sort -creatordate | grep -v rc | grep -E '^v?[0-9]' | \
+         while read tag; do echo "${tag#v} $tag"; done | \
+         sort --reverse --version-sort -k1 | head -n1 | cut -d' ' -f2)
+```
+
+The initial regex `^(v)?[0-9]` matched both formats but `sort --version-sort` treats numeric-only and v-prefixed tags as separate groups, causing incorrect ordering (v0.3 appeared before 1.26).
+
+The final fix strips the `v` prefix for sorting comparison while preserving the original tag name in output:
 - v-prefixed tags: `v5.5.2`, `v1.40.1`, `v1.4.0`
 - Numeric-only tags: `1.26`, `1.25.1` (crun's format)
 
@@ -86,10 +97,21 @@ All verification steps passed:
 
 ## Deviations from Plan
 
-None - plan executed exactly as written.
+Initial implementation had a bug: `sort --version-sort` treats numeric-only and v-prefixed tags as separate groups, causing incorrect ordering for crun (v0.3 appeared before 1.26).
+
+**Fix:** Strip `v` prefix for sorting comparison while preserving original tag name in output.
+
+## Testing Results
+
+Tested in Lima VM (`limactl shell 3pl-dev`):
+- `get_latest_tag` for crun returns `1.26` ✓
+- `get_latest_tag` for podman returns `v5.8.0` ✓
+
+Build test failed due to missing `pkg-config` dependency in VM (unrelated to changes).
 
 ## Self-Check: PASSED
 
 - Files modified: config.sh.example, functions.sh
-- Commits created: 2d70f2f, d99b83e
+- Commits created: 2d70f2f, d99b83e, 0f17912
 - All verification criteria met
+- Bug discovered in testing and fixed
