@@ -1,0 +1,142 @@
+#!/bin/bash
+
+# Prevent recursive sourcing
+[[ -n "${_CONFIG_SH_SOURCED:-}" ]] && return 0
+export _CONFIG_SH_SOURCED=1
+
+# Determine toolpath if not set already
+relativepath="./" # Define relative path to go from this script to the root level of the tool
+if [[ ! -v toolpath ]]; then scriptpath=$(cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd ); toolpath=$(realpath --canonicalize-missing ${scriptpath}/${relativepath}); fi
+
+# Source functions (includes detect_architecture)
+source "${toolpath}/functions.sh"
+
+# ============================================
+# Architecture Detection
+# ============================================
+
+# Allow override via environment variable, otherwise detect
+export ARCH="${ARCH:-$(detect_architecture)}"
+
+# Map to vendor-specific architecture strings
+export GOARCH="$ARCH"  # Go uses: amd64, arm64
+
+case "$ARCH" in
+    amd64)
+        export PROTOC_ARCH="x86_64"
+        export RUSTUP_ARCH="x86_64-unknown-linux-gnu"
+        ;;
+    arm64)
+        export PROTOC_ARCH="aarch_64"
+        export RUSTUP_ARCH="aarch64-unknown-linux-gnu"
+        ;;
+esac
+
+echo "Architecture: ${ARCH} (Go: ${GOARCH}, Protoc: ${PROTOC_ARCH}, Rust: ${RUSTUP_ARCH})"
+
+# ============================================
+# Build Paths
+# ============================================
+
+# Build Root
+export BUILD_ROOT="${toolpath}/build"
+
+# Go Root Folder
+export GO_ROOT_FOLDER="/opt/go"
+
+# Go Version and Path
+#export GOVERSION="1.22.6"
+#export GOTAG="go${GOVERSION}"
+#export GOPATH="/opt/go/${GOVERSION}/bin"
+#export GOROOT="/opt/go/${GOVERSION}"
+
+#export GOVERSION="1.23.3"
+#export GOTAG="go${GOVERSION}"
+#export GOPATH="/opt/go/${GOVERSION}/bin"
+#export GOROOT="/opt/go/${GOVERSION}"
+
+# Auto-detect latest Go version if not specified
+if [[ -z "${GOVERSION:-}" ]]; then
+    export GOVERSION=$(get_latest_go_version)
+fi
+export GOPATH="/opt/go/${GOVERSION}/bin"
+export GOROOT="/opt/go/${GOVERSION}"
+
+# Podman Version
+#export PODMAN_VERSION="5.5.2"
+#export PODMAN_TAG="v${PODMAN_VERSION}"
+export PODMAN_TAG="${PODMAN_TAG:-}"
+
+# Buildah Version
+#export BUILDAH_VERSION="1.40.1"
+#export BUILDAH_TAG="v${BUILDAH_VERSION}"
+export BUILDAH_TAG="${BUILDAH_TAG:-}"
+
+# Runc Version
+#export RUNC_VERSION="1.3.0"
+#export RUNC_TAG="v${RUNC_VERSION}"
+export RUNC_TAG="${RUNC_TAG:-}"
+
+# Crun Version
+#export CRUN_VERSION="1.25.1"
+#export CRUN_TAG="${CRUN_VERSION}"
+export CRUN_TAG="${CRUN_TAG:-}"
+
+# Conmon Version
+#export CONMON_VERSION="2.1.13"
+#export CONMON_TAG="v${CONMON_VERSION}"
+export CONMON_TAG="${CONMON_TAG:-}"
+
+# Slirp4netns Version
+#export SLIRP4NETNS_VERSION="1.3.3"
+#export SLIRP4NETNS_TAG="v${SLIRP4NETNS_VERSION}"
+export SLIRP4NETNS_TAG="${SLIRP4NETNS_TAG:-}"
+
+# Netavark Version
+#export NETAVARK_VERSION="1.15.2"
+#export NETAVARK_TAG="v${NETAVARK_VERSION}"
+export NETAVARK_TAG="${NETAVARK_TAG:-}"
+
+# Aardvark-DNS Version
+#export AARDVARK_DNS_VERSION="1.15.0"
+#export AARDVARK_DNS_TAG="v${AARDVARK_DNS_VERSION}"
+export AARDVARK_DNS_TAG="${AARDVARK_DNS_TAG:-}"
+
+# Skopeo Version
+#export SKOPEO_VERSION="1.19.0"
+#export SKOPEO_TAG="v${SKOPEO_VERSION}"
+export SKOPEO_TAG="${SKOPEO_TAG:-}"
+
+# GoMD2Man Version
+#export GOMD2MAN_VERSION="2.0.7"
+#export GOMD2MAN_TAG="v${GOMD2MAN_VERSION}"
+export GOMD2MAN_TAG="${GOMD2MAN_TAG:-}"
+
+# Toolbox Version
+#export TOOLBOX_VERSION="0.1.2"
+#export TOOLBOX_TAG="${TOOLBOX_VERSION}"
+export TOOLBOX_TAG="${TOOLBOX_TAG:-}"
+
+# Fuse-OverlayFS Version
+export FUSE_OVERLAYFS_TAG="${FUSE_OVERLAYFS_TAG:-}"
+
+# Catatonit Version
+export CATATONIT_TAG="${CATATONIT_TAG:-}"
+
+# Protoc Version and Path
+#export PROTOC_VERSION="33.1"
+#export PROTOC_TAG="v${PROTOC_VERSION}"
+
+# Auto-detect latest protoc version if not specified
+if [[ -z "${PROTOC_VERSION:-}" ]]; then
+    export PROTOC_VERSION=$(get_latest_protoc_version)
+fi
+# Derive PROTOC_TAG from PROTOC_VERSION if not already set
+if [[ -z "${PROTOC_TAG:-}" ]]; then
+    export PROTOC_TAG="v${PROTOC_VERSION}"
+fi
+export PROTOC_ROOT_FOLDER="/opt/protoc"
+export PROTOC_PATH="${PROTOC_ROOT_FOLDER}/${PROTOC_VERSION}/bin/protoc"
+
+# Create Build Folder Root
+mkdir -p "${BUILD_ROOT}"
