@@ -45,13 +45,10 @@ Plans:
   2. No apt-get commands prompt for confirmation (all use -y flag)
   3. No package configuration dialogs appear during installation
   4. No script contains `read` or other blocking input commands
-**Plans**: TBD
+**Plans**: 1 plan in 1 wave
 
 Plans:
-- [ ] 02-01: Add DEBIAN_FRONTEND=noninteractive globally
-- [ ] 02-02: Audit and fix all apt commands for -y flag
-- [ ] 02-03: Pre-answer package configuration prompts with debconf
-- [ ] 02-04: Remove or guard any read commands
+- [ ] 02-01-PLAN.md — Enable fully non-interactive installation (DEBIAN_FRONTEND + rustup -y + verification)
 
 ### Phase 3: Error Handling
 **Goal**: Any error immediately stops execution with a clear message identifying what failed
@@ -92,6 +89,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Architecture Support | 3/4 | In progress | 01-01, 01-02, 01-03 |
-| 2. Non-Interactive Mode | 0/4 | Not started | - |
+| 2. Non-Interactive Mode | 0/1 | Not started | - |
 | 3. Error Handling | 0/3 | Not started | - |
 | 4. User Experience | 0/3 | Not started | - |
