@@ -8,7 +8,9 @@ relativepath="../" # Define relative path to go from this script to the root lev
 if [[ ! -v toolpath ]]; then scriptpath=$(cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd ); toolpath=$(realpath --canonicalize-missing ${scriptpath}/${relativepath}); fi
 
 # Required Fix otherwise go complains about 1.22.6 vs 1.23 mismatch
-[[ -f "$HOME/.cargo/env" ]] && . "$HOME/.cargo/env"
+if [ -n "${HOME:-}" ] && [ -f "$HOME/.cargo/env" ]; then
+    . "$HOME/.cargo/env"
+fi
 #export PATH="CUSTOMPATH:$PATH"
 
 # Load Configuration
