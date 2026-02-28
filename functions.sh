@@ -105,7 +105,7 @@ log_component() {
     ltimestamp=$(date +"%Y%m%d")
 
     # If Command Exists, save Version
-    local loldversion
+    local loldversion=""
     if [[ -n $(command -v "${lcomponent}") ]]
     then
         loldversion=$("${lcomponent}" --version | awk '{print $NF}')
