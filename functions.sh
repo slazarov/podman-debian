@@ -4,6 +4,29 @@
 relativepath="./" # Define relative path to go from this script to the root level of the tool
 if [[ ! -v toolpath ]]; then scriptpath=$(cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd ); toolpath=$(realpath --canonicalize-missing ${scriptpath}/${relativepath}); fi
 
+# ============================================
+# Architecture Detection
+# ============================================
+
+detect_architecture() {
+    local arch
+    arch=$(uname -m)
+
+    case "$arch" in
+        x86_64)
+            echo "amd64"
+            ;;
+        aarch64|arm64)
+            echo "arm64"
+            ;;
+        *)
+            echo "ERROR: Unsupported architecture: $arch" >&2
+            echo "Supported: x86_64 (amd64), aarch64/arm64 (ARM64)" >&2
+            exit 1
+            ;;
+    esac
+}
+
 # Load Configuration
 source "${toolpath}/config.sh"
 
