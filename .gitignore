@@ -19,9 +19,6 @@ build/
 # Ignore Log Folder
 log/
 
-# Ignore Configuration
-config.sh
-
 # Development / IDE
 .idea/
 .vscode/
