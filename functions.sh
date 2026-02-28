@@ -46,7 +46,11 @@ get_latest_tag() {
     # latest=$(git tag --list --sort -creatordate | grep -v rc | head -n1)
 
     # Take the latest highest stable Version release
-    latest=$(git tag --list --sort -creatordate | grep -v rc | grep -E '^(v)?[0-9]' | sort --reverse --version-sort | head -n1)
+    # Handle both v-prefixed (v5.5.2) and numeric-only (1.26) tags
+    # Sort by version (stripping v prefix for comparison) while preserving original tag name
+    latest=$(git tag --list --sort -creatordate | grep -v rc | grep -E '^v?[0-9]' | \
+             while read tag; do echo "${tag#v} $tag"; done | \
+             sort --reverse --version-sort -k1 | head -n1 | cut -d' ' -f2)
 
     # Return Result
     echo "${latest}"
