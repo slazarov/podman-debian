@@ -91,7 +91,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Architecture Support | 1/4 | In progress | 01-01 |
+| 1. Architecture Support | 3/4 | In progress | 01-01, 01-02, 01-03 |
 | 2. Non-Interactive Mode | 0/4 | Not started | - |
 | 3. Error Handling | 0/3 | Not started | - |
 | 4. User Experience | 0/3 | Not started | - |
