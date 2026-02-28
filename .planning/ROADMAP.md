@@ -32,8 +32,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 Plans:
 - [x] 01-01-PLAN.md — Add architecture detection and vendor mappings to config.sh.example
-- [ ] 01-02-PLAN.md — Update Go installer for ARM64 support
-- [ ] 01-03-PLAN.md — Update Protoc installer for ARM64 support
+- [x] 01-02-PLAN.md — Update Go installer for ARM64 support
+- [x] 01-03-PLAN.md — Update Protoc installer for ARM64 support
 - [ ] 01-04-PLAN.md — Update Rust installer for ARM64 support
 
 ### Phase 2: Non-Interactive Mode

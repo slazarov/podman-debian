@@ -12,7 +12,7 @@ Requirements for ARM support and non-interactive installation.
 - [x] **ARCH-01**: Script detects system architecture (amd64 vs arm64)
 - [x] **ARCH-02**: Go installer uses correct architecture URL (linux-arm64 vs linux-amd64)
 - [ ] **ARCH-03**: Protoc installer uses correct architecture URL (aarch_64 vs x86_64)
-- [ ] **ARCH-04**: Rust installer uses correct architecture target (aarch64-unknown-linux-gnu)
+- [x] **ARCH-04**: Rust installer uses correct architecture target (aarch64-unknown-linux-gnu)
 - [x] **ARCH-05**: Centralized architecture variable in config.sh
 
 ### Non-Interactive Mode
@@ -71,7 +71,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ARCH-01 | Phase 1: Architecture Support | Complete |
 | ARCH-02 | Phase 1: Architecture Support | Complete |
 | ARCH-03 | Phase 1: Architecture Support | Pending |
-| ARCH-04 | Phase 1: Architecture Support | Pending |
+| ARCH-04 | Phase 1: Architecture Support | Complete |
 | ARCH-05 | Phase 1: Architecture Support | Complete |
 | NINT-01 | Phase 2: Non-Interactive Mode | Pending |
 | NINT-02 | Phase 2: Non-Interactive Mode | Pending |
