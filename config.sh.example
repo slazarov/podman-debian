@@ -1,8 +1,42 @@
 #!/bin/bash
 
+# Prevent recursive sourcing
+[[ -n "${_CONFIG_SH_SOURCED:-}" ]] && return 0
+export _CONFIG_SH_SOURCED=1
+
 # Determine toolpath if not set already
 relativepath="./" # Define relative path to go from this script to the root level of the tool
 if [[ ! -v toolpath ]]; then scriptpath=$(cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd ); toolpath=$(realpath --canonicalize-missing ${scriptpath}/${relativepath}); fi
+
+# Source functions (includes detect_architecture)
+source "${toolpath}/functions.sh"
+
+# ============================================
+# Architecture Detection
+# ============================================
+
+# Allow override via environment variable, otherwise detect
+export ARCH="${ARCH:-$(detect_architecture)}"
+
+# Map to vendor-specific architecture strings
+export GOARCH="$ARCH"  # Go uses: amd64, arm64
+
+case "$ARCH" in
+    amd64)
+        export PROTOC_ARCH="x86_64"
+        export RUSTUP_ARCH="x86_64-unknown-linux-gnu"
+        ;;
+    arm64)
+        export PROTOC_ARCH="aarch_64"
+        export RUSTUP_ARCH="aarch64-unknown-linux-gnu"
+        ;;
+esac
+
+echo "Architecture: ${ARCH} (Go: ${GOARCH}, Protoc: ${PROTOC_ARCH}, Rust: ${RUSTUP_ARCH})"
+
+# ============================================
+# Build Paths
+# ============================================
 
 # Build Root
 export BUILD_ROOT="${toolpath}/build"
