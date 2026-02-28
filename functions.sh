@@ -141,3 +141,27 @@ remove_if_user_installed() {
         rm -f "${lfile}"
     fi
 }
+
+# ============================================
+# Error Handling
+# ============================================
+
+error_handler() {
+    local exit_code=$1
+    local line_number=$2
+    local script_name="${3##*/}"  # basename
+
+    echo "" >&2
+    echo "========================================" >&2
+    echo "ERROR: Installation Failed" >&2
+    echo "========================================" >&2
+    echo "  Script:    ${script_name}" >&2
+    echo "  Line:      ${line_number}" >&2
+    echo "  Exit Code: ${exit_code}" >&2
+    echo "========================================" >&2
+    echo "" >&2
+    echo "To debug, run: bash -x ${script_name}" >&2
+    echo "" >&2
+
+    exit "${exit_code}"
+}
