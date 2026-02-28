@@ -50,8 +50,11 @@ export GO_ROOT_FOLDER="/opt/go"
 #export GOPATH="/opt/go/${GOVERSION}/bin"
 #export GOROOT="/opt/go/${GOVERSION}"
 
-export GOVERSION="1.23.3"
-export GOTAG="go${GOVERSION}"
+#export GOVERSION="1.23.3"
+#export GOTAG="go${GOVERSION}"
+#export GOPATH="/opt/go/${GOVERSION}/bin"
+#export GOROOT="/opt/go/${GOVERSION}"
+export GOVERSION="${GOVERSION:-}"
 export GOPATH="/opt/go/${GOVERSION}/bin"
 export GOROOT="/opt/go/${GOVERSION}"
 
@@ -117,8 +120,10 @@ export FUSE_OVERLAYFS_TAG="${FUSE_OVERLAYFS_TAG:-}"
 export CATATONIT_TAG="${CATATONIT_TAG:-}"
 
 # Protoc Version and Path
-export PROTOC_VERSION="33.1"
-export PROTOC_TAG="v${PROTOC_VERSION}"
+#export PROTOC_VERSION="33.1"
+#export PROTOC_TAG="v${PROTOC_VERSION}"
+export PROTOC_VERSION="${PROTOC_VERSION:-}"
+export PROTOC_TAG="${PROTOC_TAG:-}"
 export PROTOC_ROOT_FOLDER="/opt/protoc"
 export PROTOC_PATH="${PROTOC_ROOT_FOLDER}/${PROTOC_VERSION}/bin/protoc"
 
