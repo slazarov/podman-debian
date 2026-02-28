@@ -21,7 +21,7 @@ cd "${BUILD_ROOT}" || exit
 
 
 
-apt-get install -y \
+sudo apt-get install -y \
   libapparmor-dev
 
 
@@ -67,12 +67,12 @@ sudo apt-get install -y make git gcc build-essential pkgconf libtool \
 sudo apt-get install -y libglib2.0-dev libslirp-dev libcap-dev libseccomp-dev
 
 # Dependencies for fuse-overlayfs
-apt install -y libfuse3-dev
+sudo apt-get install -y libfuse3-dev
 
 # Dependencies to build Toolbox
-apt install -y libsubid-dev meson codespell cmake
-apt install -y systemd-dev
+sudo apt-get install -y libsubid-dev meson codespell cmake
+sudo apt-get install -y systemd-dev
 
 # Dependencies to install Protoc
-apt install -y unzip
+sudo apt-get install -y unzip
 
