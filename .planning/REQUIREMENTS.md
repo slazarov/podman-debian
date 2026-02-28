@@ -25,7 +25,7 @@ Requirements for ARM support and non-interactive installation.
 ### Error Handling
 
 - [x] **ERRO-01**: set -e enabled consistently across all scripts
-- [ ] **ERRO-02**: Scripts fail immediately on any error
+- [x] **ERRO-02**: Scripts fail immediately on any error
 - [x] **ERRO-03**: Error messages identify which script and line failed
 - [ ] **ERRO-04**: install.sh propagates errors from sub-scripts
 
@@ -78,7 +78,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | NINT-03 | Phase 2: Non-Interactive Mode | Complete |
 | NINT-04 | Phase 2: Non-Interactive Mode | Complete |
 | ERRO-01 | Phase 3: Error Handling | Complete |
-| ERRO-02 | Phase 3: Error Handling | Pending |
+| ERRO-02 | Phase 3: Error Handling | Complete |
 | ERRO-03 | Phase 3: Error Handling | Complete |
 | ERRO-04 | Phase 3: Error Handling | Pending |
 | UX-01 | Phase 4: User Experience | Pending |
