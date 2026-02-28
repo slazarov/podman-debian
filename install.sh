@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Non-Interactive Mode - MUST be set before ANY apt commands
+export DEBIAN_FRONTEND=noninteractive
+
 # Abort on Error
 # set -e
 
