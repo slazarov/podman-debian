@@ -16,6 +16,17 @@ source "${toolpath}/functions.sh"
 # Set error trap AFTER sourcing
 trap 'error_handler $? $LINENO "$BASH_SOURCE"' ERR
 
+# Auto-detect latest protoc version if not specified
+if [[ -z "${PROTOC_VERSION:-}" ]]; then
+    export PROTOC_VERSION=$(get_latest_protoc_version)
+    echo "Auto-detected protoc version: ${PROTOC_VERSION}"
+fi
+
+# Derive PROTOC_TAG from PROTOC_VERSION if not set
+if [[ -z "${PROTOC_TAG:-}" ]]; then
+    export PROTOC_TAG="v${PROTOC_VERSION}"
+fi
+
 # Download Protoc for detected architecture
 wget "https://github.com/protocolbuffers/protobuf/releases/download/${PROTOC_TAG}/protoc-${PROTOC_VERSION}-linux-${PROTOC_ARCH}.zip" -O protoc.zip
 
