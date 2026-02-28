@@ -46,7 +46,7 @@ get_latest_tag() {
     # latest=$(git tag --list --sort -creatordate | grep -v rc | head -n1)
 
     # Take the latest highest stable Version release
-    latest=$(git tag --list --sort -creatordate | grep -v rc | grep -E ^v | sort --reverse --version-sort | head -n1)
+    latest=$(git tag --list --sort -creatordate | grep -v rc | grep -E '^(v)?[0-9]' | sort --reverse --version-sort | head -n1)
 
     # Return Result
     echo "${latest}"
