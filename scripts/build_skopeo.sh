@@ -19,6 +19,11 @@ trap 'error_handler $? $LINENO "$BASH_SOURCE"' ERR
 # Change Folder to Build Root
 cd "${BUILD_ROOT}" || exit
 
+# Fix for cloud-init where GOCACHE, XDG_CACHE_HOME, and HOME are not set
+export GOCACHE="${GOCACHE:-/tmp/go-build}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/tmp}"
+export HOME="${HOME:-/root}"
+
 # Might actually not be needed for build-only (more for Troubleshooting)
 # go install golang.org/x/tools/gopls@latest
 
