@@ -16,6 +16,19 @@ source "${toolpath}/functions.sh"
 # Set error trap AFTER sourcing
 trap 'error_handler $? $LINENO "$BASH_SOURCE"' ERR
 
+# Auto-detect latest Go version if not specified
+if [[ -z "${GOVERSION:-}" ]]; then
+    export GOVERSION=$(get_latest_go_version)
+    echo "Auto-detected Go version: ${GOVERSION}"
+fi
+
+# Derive GOTAG from GOVERSION
+export GOTAG="go${GOVERSION}"
+
+# Update GOPATH and GOROOT with detected version
+export GOPATH="/opt/go/${GOVERSION}/bin"
+export GOROOT="/opt/go/${GOVERSION}"
+
 # Create Folders
 mkdir -p ${GOROOT}
 
