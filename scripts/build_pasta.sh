@@ -19,7 +19,10 @@ trap 'error_handler $? $LINENO "$BASH_SOURCE"' ERR
 # Change Folder to Build Root
 cd "${BUILD_ROOT}" || exit
 
-git_clone_update https://passt.top/passt passt
+# Use GitHub mirror when official passt.top is unavailable
+# Official: https://passt.top/passt (sometimes returns 504)
+# Mirror: https://github.com/AkihiroSuda/passt-mirror
+git_clone_update https://github.com/AkihiroSuda/passt-mirror passt
 cd "${BUILD_ROOT}/passt"
 git fetch --all
 git fetch --tags
