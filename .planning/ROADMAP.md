@@ -64,7 +64,7 @@ Plans:
 Plans:
 - [x] 03-01-PLAN.md — Add error_handler to functions.sh and enable strict mode in install.sh (foundation)
 - [x] 03-02-PLAN.md — Update installer scripts (install_*.sh, build_aardvark_dns.sh) with strict mode and traps
-- [ ] 03-03-PLAN.md — Update build scripts (build_*.sh) with strict mode and add run_script wrapper to install.sh
+- [x] 03-03-PLAN.md — Update build scripts (build_*.sh) with strict mode and add run_script wrapper to install.sh
 
 ### Phase 4: User Experience
 **Goal**: User has visibility into build progress and confidence in script operations
@@ -90,5 +90,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Architecture Support | 4/4 | Complete | 01-01, 01-02, 01-03, 01-04 |
 | 2. Non-Interactive Mode | 1/1 | Complete | 02-01 |
-| 3. Error Handling | 2/3 | In Progress | 03-01, 03-02 |
+| 3. Error Handling | 3/3 | Complete | 03-01, 03-02, 03-03 |
 | 4. User Experience | 0/3 | Not started | - |
