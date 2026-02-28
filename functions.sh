@@ -108,7 +108,7 @@ log_component() {
     local loldversion=""
     if [[ -n $(command -v "${lcomponent}") ]]
     then
-        loldversion=$("${lcomponent}" --version | awk '{print $NF}')
+        loldversion=$("${lcomponent}" --version 2>/dev/null | awk '{print $NF}') || true
     fi
 
     # New Version can be determined by the Checked out Branch

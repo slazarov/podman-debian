@@ -21,7 +21,7 @@ wget "https://github.com/protocolbuffers/protobuf/releases/download/${PROTOC_TAG
 
 # Extract
 mkdir -p "${PROTOC_ROOT_FOLDER}/${PROTOC_VERSION}"
-unzip protoc.zip -d "${PROTOC_ROOT_FOLDER}/${PROTOC_VERSION}"
+unzip -o protoc.zip -d "${PROTOC_ROOT_FOLDER}/${PROTOC_VERSION}"
 
 # Required Fix otherwise go complains about 1.22.6 vs 1.23 mismatch
 export PATH="${PROTOC_PATH}:${PATH}"

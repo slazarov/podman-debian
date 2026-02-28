@@ -26,4 +26,5 @@ wget "https://go.dev/dl/${GOTAG}.linux-${GOARCH}.tar.gz" -O go.tar.gz
 tar -xzf go.tar.gz
 
 # Move to destination (Go tarball extracts to 'go' directory)
+rm -rf "${GOROOT}"
 mv go "${GOROOT}"

@@ -35,7 +35,7 @@ sed -Ei "s|^go 1.22.6$|go 1.23|" go.mod
 # Build
 #make
 #make BUILDTAGS="selinux seccomp apparmor systemd" PREFIX=/usr
-make BUILDTAGS="seccomp apparmor systemd" PREFIX=/usr
-sudo make install
+make GO="$GOPATH/go" BUILDTAGS="seccomp apparmor systemd" PREFIX=/usr
+sudo make GO="$GOPATH/go" install
 
 #buildah --help

@@ -36,8 +36,8 @@ log_component "toolbox"
 # This might need to be enabled/disabled (possibly depending on Version of meson being used) if meson complains about the Folder Structure
 # cd src
 
-# Must Patch 1.22.6 -> 1.23 in /usr/src/podman/podman/go.mod
-sed -Ei "s|^go 1.22.6$|go 1.23|" go.mod
+# Must Patch 1.22.6 -> 1.23 in go.mod (if it exists)
+[[ -f go.mod ]] && sed -Ei "s|^go 1.22.6$|go 1.23|" go.mod
 
 # Build using Meson
 #meson setup builddir && cd builddir

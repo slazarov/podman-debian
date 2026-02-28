@@ -43,7 +43,7 @@ current_error_setting=$?
 set +e
 
 # Kill processes (exclude this own Script)
-ps aux | grep pasta | grep -v "bash" | awk '{print $2}' | xargs -n 1 kill -9
+ps aux | grep pasta | grep -v "bash" | awk '{print $2}' | xargs -r -n 1 kill -9 || true
 
 # Set exit on Error if required
 if [ ${current_error_setting} -eq 0 ]
@@ -53,9 +53,9 @@ fi
 
 # Copy new Executable to Destination Folder
 cp passt /usr/local/bin/
-cp passt.avx2 /usr/local/bin/
+[[ -f passt.avx2 ]] && cp passt.avx2 /usr/local/bin/
 cp pasta /usr/local/bin/
-cp pasta.avx2 /usr/local/bin/
+[[ -f pasta.avx2 ]] && cp pasta.avx2 /usr/local/bin/
 
 # Remove Files that shouldn't have been previously installed
 rm -f /usr/local/bin/passt.1
