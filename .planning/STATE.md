@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-28T09:13:50.102Z"
+last_updated: "2026-02-28T15:27:00.000Z"
 progress:
   total_phases: 3
   completed_phases: 3
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2025-02-28)
 Phase: 4 of 4 (User Experience)
 Plan: 0 of 3 in current phase
 Status: In progress
-Last activity: 2026-02-28 - Completed quick task 1: Make CRUN use latest available version if CRUN_TAG not specified
+Last activity: 2026-02-28 - Completed quick task 2: Make PROTOC_VERSION and GOVERSION use latest available version if not specified
 
 Progress: [############-] 57%
 
@@ -70,6 +70,9 @@ Recent decisions affecting current work:
 - [03-03]: Enable set -euo pipefail in all build scripts (was commented # set -e)
 - [03-03]: Add error trap after sourcing functions.sh in all build scripts
 - [03-03]: Use run_script wrapper in install.sh for progress tracking
+- [quick-2]: Use curl with grep/sed for API parsing (no jq dependency)
+- [quick-2]: Return clean version strings without prefixes (strip v/go prefixes)
+- [quick-2]: Derive PROTOC_TAG from PROTOC_VERSION, GOTAG from GOVERSION at runtime
 
 ### Pending Todos
 
@@ -84,9 +87,10 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 1 | Make CRUN use latest available version if CRUN_TAG not specified | 2026-02-28 | 502a9be | [1-make-crun-use-latest-available-version-i](./quick/1-make-crun-use-latest-available-version-i/) |
+| 2 | Make PROTOC_VERSION and GOVERSION use latest available version if not specified | 2026-02-28 | 1fc59fb | [2-make-protoc-version-and-goversion-use-la](./quick/2-make-protoc-version-and-goversion-use-la/) |
 
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed quick-1 (CRUN latest version detection pattern)
+Stopped at: Completed quick-2 (PROTOC and GO version auto-detection)
 Resume file: None
