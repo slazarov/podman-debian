@@ -11,6 +11,14 @@ if [[ ! -v toolpath ]]; then scriptpath=$(cd "$( dirname "${BASH_SOURCE[0]}" )" 
 if [ -n "${HOME:-}" ] && [ -f "$HOME/.cargo/env" ]; then
     . "$HOME/.cargo/env"
 fi
+
+# Fix for cloud-init where HOME is not set and cargo is not in PATH
+if [ -d "${HOME:-}/.cargo/bin" ]; then
+    export PATH="$HOME/.cargo/bin:$PATH"
+elif [ -d "/root/.cargo/bin" ]; then
+    export PATH="/root/.cargo/bin:$PATH"
+fi
+
 #export PATH="CUSTOMPATH:$PATH"
 
 # Load Configuration
