@@ -71,8 +71,9 @@ export BUILDAH_TAG="${BUILDAH_TAG:-}"
 export RUNC_TAG="${RUNC_TAG:-}"
 
 # Crun Version
-export CRUN_VERSION="1.25.1"
-export CRUN_TAG="${CRUN_VERSION}"
+#export CRUN_VERSION="1.25.1"
+#export CRUN_TAG="${CRUN_VERSION}"
+export CRUN_TAG="${CRUN_TAG:-}"
 
 # Conmon Version
 #export CONMON_VERSION="2.1.13"
