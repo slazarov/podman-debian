@@ -25,7 +25,7 @@ apt-get install -y \
   libapparmor-dev
 
 
-sudo apt-get install -y \
+apt-get install -y \
   git \
   iptables \
   libassuan-dev \
@@ -55,7 +55,7 @@ sudo apt-get install -y \
 
 
 # Dependencies for building crun
-sudo apt-get install -y make git gcc build-essential pkgconf libtool \
+apt-get install -y make git gcc build-essential pkgconf libtool \
    libsystemd-dev libprotobuf-c-dev libcap-dev libseccomp-dev libyajl-dev \
    autoconf python3 automake
 
@@ -64,15 +64,15 @@ sudo apt-get install -y make git gcc build-essential pkgconf libtool \
 
 
 # Dependencies for building slirp4netns
-sudo apt-get install -y libglib2.0-dev libslirp-dev libcap-dev libseccomp-dev
+apt-get install -y libglib2.0-dev libslirp-dev libcap-dev libseccomp-dev
 
 # Dependencies for fuse-overlayfs
-apt install -y libfuse3-dev
+apt-get install -y libfuse3-dev
 
 # Dependencies to build Toolbox
-apt install -y libsubid-dev meson codespell cmake
-apt install -y systemd-dev
+apt-get install -y libsubid-dev meson codespell cmake
+apt-get install -y systemd-dev
 
 # Dependencies to install Protoc
-apt install -y unzip
+apt-get install -y unzip
 
