@@ -17,4 +17,4 @@ source "${toolpath}/functions.sh"
 wget "https://static.rust-lang.org/rustup/dist/${RUSTUP_ARCH}/rustup-init" -O rustup-init
 chmod +x rustup-init
 
-./rustup-init
+./rustup-init -y
