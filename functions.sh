@@ -56,6 +56,24 @@ get_latest_tag() {
     echo "${latest}"
 }
 
+get_latest_protoc_version() {
+    # Fetch latest protoc release from GitHub API
+    # Returns version WITHOUT v prefix (e.g., "34.0" not "v34.0")
+    local latest_tag
+    latest_tag=$(curl -s "https://api.github.com/repos/protocolbuffers/protobuf/releases/latest" | grep '"tag_name"' | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+    # Strip v prefix if present (tag_name is "v34.0", we want "34.0")
+    echo "${latest_tag#v}"
+}
+
+get_latest_go_version() {
+    # Fetch latest Go version from go.dev JSON API
+    # Returns version WITHOUT go prefix (e.g., "1.26.0" not "go1.26.0")
+    local latest_version
+    latest_version=$(curl -s "https://go.dev/dl/?mode=json" | grep -m1 '"version"' | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+    # Strip go prefix if present (version is "go1.26.0", we want "1.26.0")
+    echo "${latest_version#go}"
+}
+
 git_clone_update() {
     # Input Parameters
     local lrepository="$1"
