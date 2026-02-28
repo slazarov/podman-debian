@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Abort on Error
-set -e
+# Strict Mode - Exit on error, undefined vars, pipe failures
+set -euo pipefail
 
 # Determine toolpath if not set already
 relativepath="../" # Define relative path to go from this script to the root level of the tool
@@ -13,6 +13,9 @@ source "${toolpath}/config.sh"
 # Load Functions
 source "${toolpath}/functions.sh"
 
+# Set error trap AFTER sourcing
+trap 'error_handler $? $LINENO "$BASH_SOURCE"' ERR
+
 # Change Folder to Build Root
 cd "${BUILD_ROOT}" || exit
 
@@ -22,7 +25,7 @@ apt-get install -y \
   libapparmor-dev
 
 
-sudo apt-get install \
+sudo apt-get install -y \
   git \
   iptables \
   libassuan-dev \
@@ -61,15 +64,15 @@ sudo apt-get install -y make git gcc build-essential pkgconf libtool \
 
 
 # Dependencies for building slirp4netns
-sudo apt-get install libglib2.0-dev libslirp-dev libcap-dev libseccomp-dev
+sudo apt-get install -y libglib2.0-dev libslirp-dev libcap-dev libseccomp-dev
 
 # Dependencies for fuse-overlayfs
-apt install libfuse3-dev
+apt install -y libfuse3-dev
 
 # Dependencies to build Toolbox
-apt install libsubid-dev meson codespell cmake
-apt install systemd-dev
+apt install -y libsubid-dev meson codespell cmake
+apt install -y systemd-dev
 
 # Dependencies to install Protoc
-apt install unzip
+apt install -y unzip
 
