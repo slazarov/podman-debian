@@ -67,24 +67,24 @@ rm -f /usr/share/man/man5/podman-systemd.unit.5
 rm -f /usr/share/man/man7/podman-rootless.7
 rm -f /usr/share/man/man7/podman-troubleshooting.7
 rm -rf /var/lib/cni
-rm -rf /usr/local/usr/local/share/toolbox
-rm -rf /usr/local/usr/local/share/zsh/site-functions/_toolbox
-rmdir --ignore-fail-on-non-empty /usr/local/usr/local/share/zsh/site-functions
-rmdir --ignore-fail-on-non-empty /usr/local/usr/local/share/zsh
+rm -rf /usr/local/share/toolbox
+rm -rf /usr/local/share/zsh/site-functions/_toolbox
+rmdir --ignore-fail-on-non-empty /usr/local/share/zsh/site-functions
+rmdir --ignore-fail-on-non-empty /usr/local/share/zsh
 rm -f /usr/local/share/man/man1/buildah*
 rm -f /usr/local/share/man/man1/crun*
 rm -f /usr/local/share/man/man1/fuse-overlayfs*
 rm -f /usr/local/share/man/man1/slirp4netns*
 rm -f /usr/local/bin/runc
 
-rm -f /usr/local/usr/lib/tmpfiles.d/toolbox.conf
-rmdir --ignore-fail-on-non-empty /usr/local/usr/lib/tmpfiles.d
-rm -f /usr/local/usr/local/etc/containers/toolbox.conf
-rmdir --ignore-fail-on-non-empty /usr/local/usr/local/etc/containers
-rmdir --ignore-fail-on-non-empty /usr/local/usr/local/etc
+rm -f /usr/local/lib/tmpfiles.d/toolbox.conf
+rmdir --ignore-fail-on-non-empty /usr/local/lib/tmpfiles.d
+rm -f /usr/local/etc/containers/toolbox.conf
+rmdir --ignore-fail-on-non-empty /usr/local/etc/containers
+rmdir --ignore-fail-on-non-empty /usr/local/etc
 
-rm -f /usr/local/usr/local/bin/toolbox
-rmdir --ignore-fail-on-non-empty /usr/local/usr/local/bin
+rm -f /usr/local/bin/toolbox
+rmdir --ignore-fail-on-non-empty /usr/local/bin
 
 rm -f /usr/libexec/podman/quadlet
 rm -f /usr/libexec/podman/rootlessport
