@@ -67,51 +67,34 @@ safe_make_uninstall() {
 }
 
 # Uninstall AardvarkDNS
-cd "${BUILD_ROOT}/aardvark-dns/"
-make uninstall
+safe_make_uninstall "${BUILD_ROOT}/aardvark-dns" "aardvark-dns"
 
 # Uninstall Buildah
-cd "${BUILD_ROOT}/buildah/"
-make uninstall
+safe_make_uninstall "${BUILD_ROOT}/buildah" "buildah"
 
 # Uninstall Catatonit
-cd "${BUILD_ROOT}/catatonit/"
-make uninstall
+safe_make_uninstall "${BUILD_ROOT}/catatonit" "catatonit"
 
 # Uninstall CRUN
-cd "${BUILD_ROOT}/crun/"
-make uninstall
+safe_make_uninstall "${BUILD_ROOT}/crun" "crun"
 
 # Uninstall Fuse-OverlayFS
-cd "${BUILD_ROOT}/fuse-overlayfs/"
-make uninstall
-make uninstall-am
-make uninstall-man1
-make uninstall-man
+safe_make_uninstall "${BUILD_ROOT}/fuse-overlayfs" "fuse-overlayfs"
 
 # Uninstall Netavark
-cd "${BUILD_ROOT}/netavark/"
-make uninstall
+safe_make_uninstall "${BUILD_ROOT}/netavark" "netavark"
 
 # Uninstall Pasta
-cd "${BUILD_ROOT}/passt/"
-make uninstall
+safe_make_uninstall "${BUILD_ROOT}/passt" "passt"
 
 # Uninstall Podman
-cd "${BUILD_ROOT}/podman/"
-make uninstall
+safe_make_uninstall "${BUILD_ROOT}/podman" "podman"
 
 # Uninstall slirp4netns
-cd "${BUILD_ROOT}/slirp4netns/"
-make uninstall
-make uninstall-am
-# make uninstall-bin
-make uninstall-man
-make uninstall-man1
+safe_make_uninstall "${BUILD_ROOT}/slirp4netns" "slirp4netns"
 
 # Uninstall RUNC
-cd "${BUILD_ROOT}/runc/"
-make uninstall
+safe_make_uninstall "${BUILD_ROOT}/runc" "runc"
 
 # Perform the remaining of the Uninstall manually
 rm -f /usr/share/man/man1/podman*
