@@ -210,6 +210,53 @@ error_handler() {
 }
 
 # ============================================
+# Progress Tracking
+# ============================================
+
+# Format elapsed seconds to human-readable (MM:SS or HH:MM:SS)
+format_duration() {
+    local seconds=$1
+    if [[ $seconds -ge 3600 ]]; then
+        printf "%dh %dm %ds" $((seconds/3600)) $(((seconds%3600)/60)) $((seconds%60))
+    elif [[ $seconds -ge 60 ]]; then
+        printf "%dm %ds" $((seconds/60)) $((seconds%60))
+    else
+        printf "%ds" $seconds
+    fi
+}
+
+# Track script timing (called by run_script in setup.sh)
+declare -g _SCRIPT_START=0
+
+script_start() {
+    export _SCRIPT_START=$(date +%s)
+}
+
+script_done() {
+    local script_name="$1"
+    local end=$(date +%s)
+    local elapsed=$((end - _SCRIPT_START))
+    echo ">>> Completed: ${script_name} in $(format_duration $elapsed)"
+}
+
+# Step-level progress (called within build scripts)
+declare -g _STEP_NAME=""
+declare -g _STEP_START=0
+
+step_start() {
+    local step_name="$1"
+    export _STEP_NAME="$step_name"
+    export _STEP_START=$(date +%s)
+    echo "  ${step_name}..."
+}
+
+step_done() {
+    local step_end=$(date +%s)
+    local elapsed=$((step_end - _STEP_START))
+    echo "  Done: ${_STEP_NAME} ($(format_duration $elapsed))"
+}
+
+# ============================================
 # Load Configuration (MUST be after all function definitions)
 # ============================================
 # This sources config.sh which calls get_latest_protoc_version() and get_latest_go_version()
