@@ -96,60 +96,94 @@ safe_make_uninstall "${BUILD_ROOT}/slirp4netns" "slirp4netns"
 # Uninstall RUNC
 safe_make_uninstall "${BUILD_ROOT}/runc" "runc"
 
-# Perform the remaining of the Uninstall manually
-rm -f /usr/share/man/man1/podman*
-rm -f /usr/share/man/man5/quadlet.5
-rm -f /usr/share/man/man5/podman-systemd.unit.5
-rm -f /usr/share/man/man7/podman-rootless.7
-rm -f /usr/share/man/man7/podman-troubleshooting.7
-rm -rf /var/lib/cni
-rm -rf /usr/local/share/toolbox
-rm -rf /usr/local/share/zsh/site-functions/_toolbox
-rmdir --ignore-fail-on-non-empty /usr/local/share/zsh/site-functions
-rmdir --ignore-fail-on-non-empty /usr/local/share/zsh
-rm -f /usr/local/share/man/man1/buildah*
-rm -f /usr/local/share/man/man1/crun*
-rm -f /usr/local/share/man/man1/fuse-overlayfs*
-rm -f /usr/local/share/man/man1/slirp4netns*
-rm -f /usr/local/bin/runc
+# ============================================
+# Manual File Cleanup
+# ============================================
 
-rm -f /usr/local/lib/tmpfiles.d/toolbox.conf
-rmdir --ignore-fail-on-non-empty /usr/local/lib/tmpfiles.d
-rm -f /usr/local/etc/containers/toolbox.conf
-rmdir --ignore-fail-on-non-empty /usr/local/etc/containers
-rmdir --ignore-fail-on-non-empty /usr/local/etc
+# Remove podman man pages (glob pattern)
+for f in /usr/share/man/man1/podman*; do
+    safe_rm_file "$f" "man page"
+done 2>/dev/null || true
 
-rm -f /usr/local/bin/toolbox
-rmdir --ignore-fail-on-non-empty /usr/local/bin
+safe_rm_file "/usr/share/man/man5/quadlet.5" "man page"
+safe_rm_file "/usr/share/man/man5/podman-systemd.unit.5" "man page"
+safe_rm_file "/usr/share/man/man7/podman-rootless.7" "man page"
+safe_rm_file "/usr/share/man/man7/podman-troubleshooting.7" "man page"
 
-rm -f /usr/libexec/podman/quadlet
-rm -f /usr/libexec/podman/rootlessport
-rm -rf /usr/libexec/podman
+# Remove directories
+safe_rm_dir "/var/lib/cni" "cni state"
+safe_rm_dir "/usr/local/share/toolbox" "toolbox share"
+safe_rm_file "/usr/local/share/zsh/site-functions/_toolbox" "zsh completion"
 
-rm -f /usr/local/bin/aardvark-dns
-rm -f /usr/local/bin/buildah
-rm -f /usr/local/bin/catatonit
-rm -f /usr/local/bin/crun
-rm -f /usr/local/bin/fuse-overlayfs
-rm -f /usr/local/bin/go
-rm -f /usr/local/bin/go-md2man
-rm -f /usr/local/bin/netavark
-rm -f /usr/local/bin/netavark-dhcp-proxy-client
-rm -f /usr/local/bin/passt
-rm -f /usr/local/bin/passt.avx2
-rm -f /usr/local/bin/pasta
-rm -f /usr/local/bin/pasta.avx2
-rm -f /usr/local/bin/protoc
-rm -f /usr/local/bin/runc
+# Remove empty parent directories (using rmdir with ignore)
+rmdir --ignore-fail-on-non-empty /usr/local/share/zsh/site-functions 2>/dev/null || true
+rmdir --ignore-fail-on-non-empty /usr/local/share/zsh 2>/dev/null || true
 
-rm -rf /opt/go/*
+# Remove local man pages (glob patterns)
+for f in /usr/local/share/man/man1/buildah*; do
+    safe_rm_file "$f" "man page"
+done 2>/dev/null || true
 
-rm -rf /etc/cni
+for f in /usr/local/share/man/man1/crun*; do
+    safe_rm_file "$f" "man page"
+done 2>/dev/null || true
 
-rm -rf /etc/containers
+for f in /usr/local/share/man/man1/fuse-overlayfs*; do
+    safe_rm_file "$f" "man page"
+done 2>/dev/null || true
 
-rm -f /usr/lib/systemd/system/podman*
+for f in /usr/local/share/man/man1/slirp4netns*; do
+    safe_rm_file "$f" "man page"
+done 2>/dev/null || true
 
+safe_rm_file "/usr/local/bin/runc" "binary"
+
+# Remove toolbox files
+safe_rm_file "/usr/local/lib/tmpfiles.d/toolbox.conf" "tmpfiles config"
+rmdir --ignore-fail-on-non-empty /usr/local/lib/tmpfiles.d 2>/dev/null || true
+
+safe_rm_file "/usr/local/etc/containers/toolbox.conf" "toolbox config"
+rmdir --ignore-fail-on-non-empty /usr/local/etc/containers 2>/dev/null || true
+rmdir --ignore-fail-on-non-empty /usr/local/etc 2>/dev/null || true
+
+safe_rm_file "/usr/local/bin/toolbox" "binary"
+rmdir --ignore-fail-on-non-empty /usr/local/bin 2>/dev/null || true
+
+# Remove podman libexec files
+safe_rm_file "/usr/libexec/podman/quadlet" "binary"
+safe_rm_file "/usr/libexec/podman/rootlessport" "binary"
+safe_rm_dir "/usr/libexec/podman" "podman libexec"
+
+# Remove binaries
+safe_rm_file "/usr/local/bin/aardvark-dns" "binary"
+safe_rm_file "/usr/local/bin/buildah" "binary"
+safe_rm_file "/usr/local/bin/catatonit" "binary"
+safe_rm_file "/usr/local/bin/crun" "binary"
+safe_rm_file "/usr/local/bin/fuse-overlayfs" "binary"
+safe_rm_file "/usr/local/bin/go" "binary"
+safe_rm_file "/usr/local/bin/go-md2man" "binary"
+safe_rm_file "/usr/local/bin/netavark" "binary"
+safe_rm_file "/usr/local/bin/netavark-dhcp-proxy-client" "binary"
+safe_rm_file "/usr/local/bin/passt" "binary"
+safe_rm_file "/usr/local/bin/passt.avx2" "binary"
+safe_rm_file "/usr/local/bin/pasta" "binary"
+safe_rm_file "/usr/local/bin/pasta.avx2" "binary"
+safe_rm_file "/usr/local/bin/protoc" "binary"
+safe_rm_file "/usr/local/bin/runc" "binary"
+
+# Remove Go installation
+safe_rm_dir "/opt/go" "go installation"
+
+# Remove configuration directories
+safe_rm_dir "/etc/cni" "cni config"
+safe_rm_dir "/etc/containers" "containers config"
+
+# Remove systemd files (glob pattern)
+for f in /usr/lib/systemd/system/podman*; do
+    safe_rm_file "$f" "systemd unit"
+done 2>/dev/null || true
+
+# Remove package-managed binaries (these use dpkg check)
 remove_if_user_installed "/usr/bin/podman"
 remove_if_user_installed "/usr/bin/podman-remote"
 remove_if_user_installed "/usr/bin/podmansh"
