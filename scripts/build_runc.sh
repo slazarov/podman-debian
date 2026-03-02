@@ -19,19 +19,29 @@ trap 'error_handler $? $LINENO "$BASH_SOURCE"' ERR
 # Change Folder to Build Root
 cd "${BUILD_ROOT}" || exit
 
+# Initialize build logging
+log_build_output "runc"
+
 # Required Fix otherwise go complains about 1.22.6 vs 1.23 mismatch
 export PATH="$GOPATH:$PATH"
 
-#git clone https://github.com/opencontainers/runc.git $GOPATH/src/github.com/opencontainers/runc
-#cd $GOPATH/src/github.com/opencontainers/runc
-
+step_start "Cloning repository"
 git_clone_update https://github.com/opencontainers/runc.git runc
 cd "${BUILD_ROOT}/runc"
+step_done
+
+step_start "Checking out tag"
 git_checkout "${RUNC_TAG}"
+step_done
 
-# Log Component
+step_start "Logging version"
 log_component "runc"
+step_done
 
-# Build
-make BUILDTAGS="selinux seccomp apparmor"
+step_start "Building"
+run_logged make BUILDTAGS="selinux seccomp apparmor"
+step_done
+
+step_start "Installing"
 sudo cp runc /usr/local/bin/runc
+step_done
