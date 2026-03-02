@@ -19,37 +19,36 @@ trap 'error_handler $? $LINENO "$BASH_SOURCE"' ERR
 # Change Folder to Build Root
 cd "${BUILD_ROOT}" || exit
 
+# Initialize build logging
+log_build_output "pasta"
+
+step_start "Cloning repository"
 git_clone_update git://passt.top/passt passt
 cd "${BUILD_ROOT}/passt"
 git fetch --all
 git fetch --tags
 git pull
+step_done
 
-# Save Version
+step_start "Saving version"
 export GIT_CHECKED_OUT_TAG=$(date +"%Y%m%d")
+step_done
 
-# Log Component
+step_start "Logging version"
 log_component "pasta"
+step_done
 
-# Build
-make
+step_start "Building"
+run_logged make
+step_done
 
-# Kill current running Processes
-# Save current Error Setting
+step_start "Installing"
+# Kill current running Processes (ignore errors)
 shopt -qo errexit
 current_error_setting=$?
-
-# Avoid stopping on Errors
 set +e
-
-# Kill processes (exclude this own Script)
 ps aux | grep pasta | grep -v "bash" | awk '{print $2}' | xargs -r -n 1 kill -9 || true
-
-# Set exit on Error if required
-if [ ${current_error_setting} -eq 0 ]
-then
-    set -e
-fi
+if [ ${current_error_setting} -eq 0 ]; then set -e; fi
 
 # Copy new Executable to Destination Folder
 cp passt /usr/local/bin/
@@ -64,3 +63,4 @@ rm -f /usr/local/bin/passt.h
 rm -f /usr/local/bin/pasta.1
 rm -f /usr/local/bin/pasta.c
 rm -f /usr/local/bin/pasta.h
+step_done
