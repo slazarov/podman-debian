@@ -22,18 +22,21 @@ trap 'error_handler $? $LINENO "$BASH_SOURCE"' ERR
 # Track installation progress
 COMPONENTS_OK=()
 
-# Wrapper function for running sub-scripts with error handling
+# Wrapper function for running sub-scripts with error handling and timing
 run_script() {
     local script="$1"
+    local script_start_time
+
     echo ""
     echo "========================================"
     echo ">>> Starting: ${script}"
     echo "========================================"
 
+    script_start_time=$(date +%s)
     source "${toolpath}/scripts/${script}"
 
     COMPONENTS_OK+=("${script}")
-    echo ">>> Completed: ${script}"
+    script_done "${script}"
 }
 
 # Install Requirements
