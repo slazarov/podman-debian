@@ -256,6 +256,33 @@ step_done() {
     echo "  Done: ${_STEP_NAME} ($(format_duration $elapsed))"
 }
 
+# Build output logging
+declare -g BUILD_LOG=""
+
+log_build_output() {
+    # Initializes log file for a component's build output
+    # Usage: log_build_output "component_name"
+    local component="$1"
+    BUILD_LOG="${toolpath}/log/build_${component}.log"
+
+    # Ensure log directory exists
+    mkdir -p "$(dirname "$BUILD_LOG")"
+
+    # Initialize log file with header
+    {
+        echo "==========================================="
+        echo "Build Log: ${component}"
+        echo "Started: $(date)"
+        echo "==========================================="
+    } > "$BUILD_LOG"
+}
+
+run_logged() {
+    # Runs command with output going only to log file (suppresses console output)
+    # Usage: run_logged make [args...]
+    "$@" >> "$BUILD_LOG" 2>&1
+}
+
 # ============================================
 # Load Configuration (MUST be after all function definitions)
 # ============================================
