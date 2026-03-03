@@ -48,7 +48,7 @@ sed -Ei "s|^go 1.22.6$|go 1.23|" go.mod
 step_done
 
 step_start "Building"
-run_logged make
+run_logged make -j "$NPROC"
 step_done
 
 step_start "Installing"

@@ -39,7 +39,7 @@ log_component "runc"
 step_done
 
 step_start "Building"
-run_logged make BUILDTAGS="selinux seccomp apparmor"
+run_logged make -j "$NPROC" BUILDTAGS="selinux seccomp apparmor"
 step_done
 
 step_start "Installing"
