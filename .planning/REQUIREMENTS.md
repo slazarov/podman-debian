@@ -38,7 +38,7 @@ Requirements for ARM support and non-interactive installation.
 ### Build Time Optimization
 
 - [ ] **PERF-01**: All Make-based builds use parallel compilation with make -j$(nproc)
-- [ ] **PERF-02**: Git clones use shallow clone (--depth 1) to reduce network transfer
+- [x] **PERF-02**: Git clones use shallow clone (--depth 1) to reduce network transfer
 - [ ] **PERF-03**: Go builds use optimization flags (gcflags, ldflags, GOGC=off)
 - [ ] **PERF-04**: Cargo builds use CARGO_BUILD_JOBS for parallel compilation
 
