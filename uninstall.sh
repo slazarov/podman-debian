@@ -90,12 +90,6 @@ safe_make_uninstall "${BUILD_ROOT}/passt" "passt"
 # Uninstall Podman
 safe_make_uninstall "${BUILD_ROOT}/podman" "podman"
 
-# Uninstall slirp4netns
-safe_make_uninstall "${BUILD_ROOT}/slirp4netns" "slirp4netns"
-
-# Uninstall RUNC
-safe_make_uninstall "${BUILD_ROOT}/runc" "runc"
-
 # ============================================
 # Manual File Cleanup
 # ============================================
@@ -132,12 +126,6 @@ for f in /usr/local/share/man/man1/fuse-overlayfs*; do
     safe_rm_file "$f" "man page"
 done 2>/dev/null || true
 
-for f in /usr/local/share/man/man1/slirp4netns*; do
-    safe_rm_file "$f" "man page"
-done 2>/dev/null || true
-
-safe_rm_file "/usr/local/bin/runc" "binary"
-
 # Remove toolbox files
 safe_rm_file "/usr/local/lib/tmpfiles.d/toolbox.conf" "tmpfiles config"
 rmdir --ignore-fail-on-non-empty /usr/local/lib/tmpfiles.d 2>/dev/null || true
@@ -169,7 +157,6 @@ safe_rm_file "/usr/local/bin/passt.avx2" "binary"
 safe_rm_file "/usr/local/bin/pasta" "binary"
 safe_rm_file "/usr/local/bin/pasta.avx2" "binary"
 safe_rm_file "/usr/local/bin/protoc" "binary"
-safe_rm_file "/usr/local/bin/runc" "binary"
 
 # Remove Go installation
 safe_rm_dir "/opt/go" "go installation"
