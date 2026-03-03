@@ -81,14 +81,8 @@ run_script "build_pasta.sh"
 # Build Podman
 run_script "build_podman.sh"
 
-# Build RUNC
-run_script "build_runc.sh"
-
 # Build Skopeo
 run_script "build_skopeo.sh"
-
-# Build Slirp4NetNS
-run_script "build_slirp4netns.sh"
 
 # Build Toolbox
 run_script "build_toolbox.sh"
