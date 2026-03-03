@@ -19,6 +19,19 @@ source "${toolpath}/functions.sh"
 # Set error trap AFTER sourcing (config/functions may not support strict mode)
 trap 'error_handler $? $LINENO "$BASH_SOURCE"' ERR
 
+# ============================================
+# Pre-flight Validation (before any build operations)
+# ============================================
+echo ""
+echo ">>> Running pre-flight validation..."
+# Source the preflight script (it runs checks when sourced from setup.sh context)
+if ! source "${toolpath}/scripts/preflight_check.sh" || ! run_preflight_checks; then
+    echo ""
+    echo "Pre-flight validation failed. Please fix the issues above and retry."
+    exit 1
+fi
+echo ">>> Pre-flight validation passed"
+
 # Track installation progress
 COMPONENTS_OK=()
 
