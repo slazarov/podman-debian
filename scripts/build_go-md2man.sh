@@ -47,8 +47,13 @@ step_start "Applying pre-build fixes"
 sed -Ei "s|^go 1.22.6$|go 1.23|" go.mod
 step_done
 
+step_start "Configuring Go optimization"
+# Disable GC during compilation for speed (uses more RAM but ~30% faster)
+export GOGC="${GOGC_BUILD:-off}"
+step_done
+
 step_start "Building"
-run_logged make -j "$NPROC"
+run_logged make -j "$NPROC" GCFLAGS="${GO_GCFLAGS}" LDFLAGS="${GO_LDFLAGS}"
 step_done
 
 step_start "Installing"

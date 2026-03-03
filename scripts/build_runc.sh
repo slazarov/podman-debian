@@ -38,8 +38,13 @@ step_start "Logging version"
 log_component "runc"
 step_done
 
+step_start "Configuring Go optimization"
+# Disable GC during compilation for speed (uses more RAM but ~30% faster)
+export GOGC="${GOGC_BUILD:-off}"
+step_done
+
 step_start "Building"
-run_logged make -j "$NPROC" BUILDTAGS="selinux seccomp apparmor"
+run_logged make -j "$NPROC" GCFLAGS="${GO_GCFLAGS}" LDFLAGS="${GO_LDFLAGS}" BUILDTAGS="selinux seccomp apparmor"
 step_done
 
 step_start "Installing"

@@ -35,9 +35,14 @@ step_start "Logging version"
 log_component "conmon"
 step_done
 
-step_start "Building"
+step_start "Configuring Go optimization"
+# Disable GC during compilation for speed (uses more RAM but ~30% faster)
+export GOGC="${GOGC_BUILD:-off}"
 export GOCACHE="$(mktemp -d)"
-run_logged make
+step_done
+
+step_start "Building"
+run_logged make -j "$NPROC" GCFLAGS="${GO_GCFLAGS}" LDFLAGS="${GO_LDFLAGS}"
 step_done
 
 step_start "Installing"
