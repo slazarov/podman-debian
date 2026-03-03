@@ -47,6 +47,22 @@ export NPROC="${NPROC:-$(nproc)}"
 export SHALLOW_CLONE="${SHALLOW_CLONE:-true}"
 
 # ============================================
+# Rust/Cargo Build Optimization
+# ============================================
+
+# Parallel job count for cargo builds (defaults to NPROC)
+export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$NPROC}"
+
+# Optional: Enable sccache for remote caching
+# Set to "true" and configure SCCACHE_* variables to enable
+# Requires: sccache installed and configured
+export SCCACHE_ENABLED="${SCCACHE_ENABLED:-false}"
+
+# sccache configuration (only used if SCCACHE_ENABLED=true)
+# Example for S3: export SCCACHE_S3_BUCKET="my-cache-bucket"
+# Example for WebDAV: export SCCACHE_WEBDAV_ENDPOINT="https://cache.example.com"
+
+# ============================================
 # Build Paths
 # ============================================
 
