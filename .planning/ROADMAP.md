@@ -74,17 +74,35 @@ Plans:
   1. User sees progress messages indicating current operation during installation
   2. Build output is captured to log files for troubleshooting
   3. User can cleanly uninstall all installed components using an uninstall script
-**Plans**: TBD
+**Plans**: 3 plans in 1 wave
 
 Plans:
-- [x] 04-01: Add progress messages throughout installation
-- [x] 04-02: Ensure build logging works correctly
-- [x] 04-03: Verify uninstall script works for all components
+- [x] 04-01-PLAN.md — Add progress messages throughout installation
+- [x] 04-02-PLAN.md — Ensure build logging works correctly
+- [x] 04-03-PLAN.md — Verify uninstall script works for all components
+
+### Phase 5: Build Time Optimization for Fresh VM Builds
+**Goal**: Reduce build time from 30+ minutes to 10-15 minutes on fresh VMs through parallelization, shallow clones, and compiler optimizations
+**Depends on**: Phase 4
+**Requirements**: PERF-01, PERF-02, PERF-03, PERF-04
+**Success Criteria** (what must be TRUE):
+  1. All Make-based builds use parallel compilation (-j flag with NPROC)
+  2. Git clones use shallow clone (--depth 1) reducing network transfer by ~95%
+  3. Go builds use optimization flags (gcflags, ldflags, GOGC=off) for ~30% faster compilation
+  4. Cargo builds use CARGO_BUILD_JOBS for 2-4x parallel speedup
+  5. Users can override all optimization settings via environment variables
+**Plans**: 4 plans in 2 waves
+
+Plans:
+- [ ] 05-01-PLAN.md — Add NPROC detection and shallow clone support (foundation)
+- [ ] 05-02-PLAN.md — Add parallel make to all Make-based build scripts
+- [ ] 05-03-PLAN.md — Add Go compiler optimization flags
+- [ ] 05-04-PLAN.md — Add Cargo parallel compilation support
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -92,3 +110,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 2. Non-Interactive Mode | 1/1 | Complete | 02-01 |
 | 3. Error Handling | 3/3 | Complete | 03-01, 03-02, 03-03 |
 | 4. User Experience | 3/3 | Complete | 04-01, 04-02, 04-03 |
+| 5. Build Time Optimization | 0/4 | Planned | - |

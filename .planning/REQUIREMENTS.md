@@ -35,6 +35,13 @@ Requirements for ARM support and non-interactive installation.
 - [x] **UX-02**: Build output logged to files
 - [x] **UX-03**: Uninstall script exists and works
 
+### Build Time Optimization
+
+- [ ] **PERF-01**: All Make-based builds use parallel compilation with make -j$(nproc)
+- [ ] **PERF-02**: Git clones use shallow clone (--depth 1) to reduce network transfer
+- [ ] **PERF-03**: Go builds use optimization flags (gcflags, ldflags, GOGC=off)
+- [ ] **PERF-04**: Cargo builds use CARGO_BUILD_JOBS for parallel compilation
+
 ## v2 Requirements
 
 Deferred to future release.
@@ -51,6 +58,12 @@ Deferred to future release.
 - **ADVN-02**: Component selection (choose what to build)
 - **ADVN-03**: Checksum verification for downloaded tarballs
 - **ADVN-04**: Rootless configuration automation (subuid/subgid)
+
+### Advanced Build Optimization
+
+- **PERF-05**: Optional sccache remote caching support for CI/CD pipelines
+- **PERF-06**: Optional mold linker for C/C++ components
+- **PERF-07**: RAM disk (tmpfs) build option for systems with 16GB+ RAM
 
 ## Out of Scope
 
@@ -84,12 +97,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UX-01 | Phase 4: User Experience | Complete |
 | UX-02 | Phase 4: User Experience | Complete |
 | UX-03 | Phase 4: User Experience | Complete |
+| PERF-01 | Phase 5: Build Time Optimization | Planned |
+| PERF-02 | Phase 5: Build Time Optimization | Planned |
+| PERF-03 | Phase 5: Build Time Optimization | Planned |
+| PERF-04 | Phase 5: Build Time Optimization | Planned |
 
 **Coverage:**
 - v1 requirements: 16 total
 - Mapped to phases: 16
 - Unmapped: 0
+- Build optimization requirements: 4
+- Total requirements: 20
 
 ---
 *Requirements defined: 2025-02-28*
-*Last updated: 2026-02-28 after roadmap creation*
+*Last updated: 2026-03-03 - Added Phase 5 build optimization requirements*
