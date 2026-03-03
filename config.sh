@@ -35,6 +35,18 @@ esac
 echo "Architecture: ${ARCH} (Go: ${GOARCH}, Protoc: ${PROTOC_ARCH}, Rust: ${RUSTUP_ARCH})"
 
 # ============================================
+# Build Optimization Settings
+# ============================================
+
+# Parallel job count for make/cargo builds
+# Default: number of CPU cores
+export NPROC="${NPROC:-$(nproc)}"
+
+# Shallow clone for git repositories (reduces network transfer ~95%)
+# Set to "false" to disable (e.g., for development/debugging)
+export SHALLOW_CLONE="${SHALLOW_CLONE:-true}"
+
+# ============================================
 # Build Paths
 # ============================================
 
