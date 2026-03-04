@@ -25,10 +25,12 @@ case "$ARCH" in
     amd64)
         export PROTOC_ARCH="x86_64"
         export RUSTUP_ARCH="x86_64-unknown-linux-gnu"
+        export SCCACHE_ARCH="x86_64-unknown-linux-musl"
         ;;
     arm64)
         export PROTOC_ARCH="aarch_64"
         export RUSTUP_ARCH="aarch64-unknown-linux-gnu"
+        export SCCACHE_ARCH="aarch64-unknown-linux-musl"
         ;;
 esac
 
@@ -53,14 +55,13 @@ export SHALLOW_CLONE="${SHALLOW_CLONE:-true}"
 # Parallel job count for cargo builds (defaults to NPROC)
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$NPROC}"
 
-# Optional: Enable sccache for remote caching
-# Set to "true" and configure SCCACHE_* variables to enable
-# Requires: sccache installed and configured
+# Optional: Enable sccache for Rust build caching (50-90% rebuild speedup)
+# Set to "true" to enable: export SCCACHE_ENABLED=true
 export SCCACHE_ENABLED="${SCCACHE_ENABLED:-false}"
 
-# sccache configuration (only used if SCCACHE_ENABLED=true)
-# Example for S3: export SCCACHE_S3_BUCKET="my-cache-bucket"
-# Example for WebDAV: export SCCACHE_WEBDAV_ENDPOINT="https://cache.example.com"
+# sccache version and cache directory (only used if SCCACHE_ENABLED=true)
+export SCCACHE_VERSION="${SCCACHE_VERSION:-0.14.0}"
+export SCCACHE_DIR="${SCCACHE_DIR:-/var/cache/sccache}"
 
 # ============================================
 # Go Build Optimization
