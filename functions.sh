@@ -114,9 +114,17 @@ git_checkout() {
 
     if [[ -n "${ltag}" ]]
     then
+       # For shallow clones, the tag may not be available locally - fetch it
+       if ! git rev-parse "${ltag}" &>/dev/null; then
+           git fetch --depth 1 origin tag "${ltag}"
+       fi
        git checkout "${ltag}"
        export GIT_CHECKED_OUT_TAG="${ltag}"
     else
+       # No tag specified - need all tags to find latest
+       if [[ "${SHALLOW_CLONE:-true}" == "true" ]]; then
+           git fetch --tags
+       fi
        git checkout $(get_latest_tag)
        export GIT_CHECKED_OUT_TAG=$(get_latest_tag)
     fi
