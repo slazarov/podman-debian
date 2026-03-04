@@ -23,11 +23,11 @@ Requirements for v1.2 Include Common Libraries. Each maps to roadmap phases.
 
 ### Documentation
 
-- [ ] **DOCS-01**: Man pages from common and image libraries are installed to system man paths
+- [x] **DOCS-01**: Man pages from common and image libraries are installed to system man paths
 
 ### Uninstall
 
-- [ ] **UNINST-01**: Uninstall script removes all container-libs installed files and build directory
+- [x] **UNINST-01**: Uninstall script removes all container-libs installed files and build directory
 
 ## Future Requirements
 
@@ -56,8 +56,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CONFIG-03 | Phase 12 | Complete |
 | CONFIG-04 | Phase 12 | Complete |
 | CONFIG-05 | Phase 12 | Complete |
-| DOCS-01 | Phase 13 | Pending |
-| UNINST-01 | Phase 13 | Pending |
+| DOCS-01 | Phase 13 | Complete |
+| UNINST-01 | Phase 13 | Complete |
 
 **Coverage:**
 - v1.2 requirements: 10 total
@@ -66,4 +66,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-03-04*
-*Last updated: 2026-03-04 after Phase 12 completion*
+*Last updated: 2026-03-04 after Phase 13 completion*

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Include Common Libraries
 status: completed
-stopped_at: Completed 12-01-PLAN.md
-last_updated: "2026-03-04T10:33:42.262Z"
-last_activity: 2026-03-04 -- Executed 12-01 (install container config files)
+stopped_at: Completed 13-01-PLAN.md
+last_updated: "2026-03-04T11:27:35Z"
+last_activity: 2026-03-04 -- Executed 13-01 (man pages and uninstall)
 progress:
   total_phases: 3
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
-  percent: 67
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
+  percent: 100
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 
 ## Current Position
 
-Phase: 12 of 13 (Install Configuration Files) - complete
+Phase: 13 of 13 (Man Pages and Uninstall) - complete
 Plan: 01/01 complete
-Status: Phase 12 complete, ready for Phase 13
-Last activity: 2026-03-04 -- Executed 12-01 (install container config files)
+Status: v1.2 milestone complete -- all 3 phases done
+Last activity: 2026-03-04 -- Executed 13-01 (man pages and uninstall)
 
-Progress: [######....] 67%
+Progress: [##########] 100%
 
 ## Previous Milestones
 
@@ -56,6 +56,8 @@ All decisions logged in PROJECT.md Key Decisions table.
 - Place container-libs build after go-md2man and before netavark in setup.sh build order
 - Use install -m 0644 instead of cp for config file installation (matches upstream Makefile)
 - Seccomp.json fallback from root to common/ subdir to handle both Makefile output locations
+- Used glob patterns in uninstall.sh for container-libs man pages (consistent with existing patterns)
+- Installed .containerignore.5 alias alongside the 15 section-5 man pages
 
 ### Tech Debt
 - Minor: install_dependencies.sh lacks DEBIAN_FRONTEND (relies on setup.sh)
@@ -71,9 +73,10 @@ All decisions logged in PROJECT.md Key Decisions table.
 |-------|------|----------|-------|-------|
 | 11 | 01 | 2min | 2 | 4 |
 | 12 | 01 | 2min | 2 | 2 |
+| 13 | 01 | 2min | 2 | 3 |
 
 ## Session Continuity
 
 Last session: 2026-03-04
-Stopped at: Completed 12-01-PLAN.md
+Stopped at: Completed 13-01-PLAN.md
 Resume file: None
