@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A shell script suite that compiles and installs the latest stable Podman from source on Debian/Ubuntu systems. Works on both amd64 and ARM64 architectures with automatic detection. Features fully unattended installation, pre-flight system validation, multi-layer build caching (sccache, Go cache, ccache, mold), and production-ready container runtime configuration.
+A shell script suite that compiles and installs the latest stable Podman from source on Debian/Ubuntu systems. Works on both amd64 and ARM64 architectures with automatic detection. Features fully unattended installation, pre-flight system validation, multi-layer build caching (sccache, Go cache, ccache, mold), production-ready container runtime configuration with seccomp profiles, and complete man page documentation.
 
 ## Core Value
 
@@ -35,21 +35,14 @@ Compile and install Podman on any Debian/Ubuntu system without user interaction.
 - ✓ Opt-in ccache for C builds — v1.1
 - ✓ Opt-in mold linker for Rust builds — v1.1
 - ✓ Symmetric uninstall (removes everything install adds) — v1.1
+- ✓ Build container-libs from source with seccomp.json generation — v1.2
+- ✓ Install runtime config files (seccomp, policy, registries, storage) — v1.2
+- ✓ Man pages for container config files — v1.2
+- ✓ Symmetric uninstall of all container-libs artifacts — v1.2
 
 ### Active
 
-## Current Milestone: v1.2 Include Common Libraries
-
-**Goal:** Integrate container-libs (containers-common) to provide standard runtime config files that Podman expects.
-
-**Target features:**
-- Clone and build container-libs from source
-- Generate and install seccomp.json (resolves v1.1 tech debt)
-- Install policy.json for container image signature verification
-- Install registries.d/default.yaml for registry signature verification
-- Install storage.conf for container storage defaults
-- Symmetric uninstall of all new artifacts
-- Install man pages for container config files
+(No active requirements — start next milestone to define)
 
 ### Out of Scope
 
@@ -62,16 +55,20 @@ Compile and install Podman on any Debian/Ubuntu system without user interaction.
 - Component selection — full installation is the goal
 - Parallel build orchestration — complexity disproportionate to gain
 - CNI networking — removed in Podman 5.0
+- Building container-libs Go libraries as importable packages — only config files and generated artifacts needed
+- Custom seccomp profile modifications — default upstream profile is sufficient
 
 ## Context
 
-Shipped v1.1 with 2,183 LOC shell code across 20+ scripts.
-Tech stack: Bash, Git, Go, Rust, Make, Cargo, sccache, ccache, mold.
-v1.0 shipped 2026-03-03, v1.1 shipped 2026-03-04.
+Shipped v1.2 with 2,404 LOC shell code across 22 scripts.
+Tech stack: Bash, Git, Go, Rust, Make, Cargo, Meson, sccache, ccache, mold, go-md2man.
+v1.0 shipped 2026-03-03, v1.1 shipped 2026-03-04, v1.2 shipped 2026-03-04.
 
 Build caching layers: sccache (Rust), ccache (C), Go cache (Go), mold linker (Rust linking). Fresh build ~15-20 min, cached rebuild dramatically faster.
 
 container-libs (https://github.com/containers/container-libs) is the monorepo for containers-common: provides seccomp.json, policy.json, default.yaml, storage.conf, and man pages needed by Podman at runtime. Build requires Go and go-md2man (both already in our toolchain).
+
+All v1.1 tech debt resolved: seccomp.json now properly built and installed.
 
 ## Constraints
 
@@ -87,7 +84,7 @@ container-libs (https://github.com/containers/container-libs) is the monorepo fo
 | Latest stable version only | Simplicity over flexibility for personal use | ✓ Good - No version pinning complexity |
 | Non-interactive mode | Set-and-forget installation experience | ✓ Good - DEBIAN_FRONTEND=noninteractive throughout |
 | Use uname -m for arch detection | More portable than dpkg-based methods | ✓ Good - Works on all systems |
-| Circular sourcing config.sh ↔ functions.sh | Enables shared utilities and config | ⚠️ Revisit - Guarded but fragile pattern |
+| Circular sourcing config.sh <-> functions.sh | Enables shared utilities and config | ⚠️ Revisit - Guarded but fragile pattern |
 | set -euo pipefail everywhere | Catch all errors immediately | ✓ Good - Consistent strict mode |
 | Parallel make with NPROC | 2-4x build speedup on multi-core | ✓ Good - Auto-detects CPU count |
 | Shallow git clones (--depth 1) | ~95% network transfer reduction | ✓ Good - User can override |
@@ -101,7 +98,9 @@ container-libs (https://github.com/containers/container-libs) is the monorepo fo
 | mold via .cargo/config.toml | Avoids RUSTFLAGS conflicts with sccache RUSTC_WRAPPER | ✓ Good - Clean integration |
 | ccache with COMPILERCHECK=content | Correct cache invalidation on GCC upgrades | ✓ Good - Avoids stale cache hits |
 | Centralized Go cache in config.sh | Single source of truth, no per-script overrides | ✓ Good - DRY principle |
-| seccomp_profile static path | Standard containers-common path | ⚠️ Revisit - File not installed, needs container-libs |
+| Target only make seccomp.json | Only seccomp profile needed, not full container-libs build | ✓ Good - Minimal build, fast execution |
+| install -m 0644 for config files | Matches upstream Makefile conventions | ✓ Good - Consistent permissions |
+| go-md2man for man pages | Already in toolchain from other builds | ✓ Good - No new dependencies |
 
 ---
-*Last updated: 2026-03-04 after v1.2 milestone start*
+*Last updated: 2026-03-04 after v1.2 milestone*
