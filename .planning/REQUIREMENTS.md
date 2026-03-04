@@ -9,9 +9,9 @@ Requirements for v1.2 Include Common Libraries. Each maps to roadmap phases.
 
 ### Build Integration
 
-- [ ] **BUILD-01**: container-libs is cloned from source and built during setup
-- [ ] **BUILD-02**: seccomp.json is generated via container-libs Go codegen (`make seccomp.json`)
-- [ ] **BUILD-03**: Required C build dependencies (libgpgme-dev, libseccomp-dev) are installed automatically
+- [x] **BUILD-01**: container-libs is cloned from source and built during setup
+- [x] **BUILD-02**: seccomp.json is generated via container-libs Go codegen (`make seccomp.json`)
+- [x] **BUILD-03**: Required C build dependencies (libgpgme-dev, libseccomp-dev) are installed automatically
 
 ### Configuration
 
@@ -48,9 +48,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BUILD-01 | Phase 11 | Pending |
-| BUILD-02 | Phase 11 | Pending |
-| BUILD-03 | Phase 11 | Pending |
+| BUILD-01 | Phase 11 | Complete |
+| BUILD-02 | Phase 11 | Complete |
+| BUILD-03 | Phase 11 | Complete |
 | CONFIG-01 | Phase 12 | Pending |
 | CONFIG-02 | Phase 12 | Pending |
 | CONFIG-03 | Phase 12 | Pending |

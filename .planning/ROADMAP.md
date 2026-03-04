@@ -32,7 +32,7 @@
 
 ### v1.2 Include Common Libraries (In Progress)
 
-- [ ] **Phase 11: Build container-libs** - Clone, install C dependencies, build container-libs and generate seccomp.json
+- [x] **Phase 11: Build container-libs** - Clone, install C dependencies, build container-libs and generate seccomp.json
 - [ ] **Phase 12: Install Configuration Files** - Install all runtime config files to system paths
 - [ ] **Phase 13: Man Pages and Uninstall** - Install man pages and extend uninstall to cover all new artifacts
 
@@ -48,7 +48,7 @@
   3. seccomp.json exists as a generated artifact after build completes
 **Plans:** 1 plan
 Plans:
-- [ ] 11-01-PLAN.md -- Create build_container-libs.sh, add config variable, wire into setup.sh
+- [x] 11-01-PLAN.md -- Create build_container-libs.sh, add config variable, wire into setup.sh
 
 ### Phase 12: Install Configuration Files
 **Goal**: All container runtime config files are installed to their standard system paths
@@ -87,7 +87,7 @@ Plans:
 | 8. Build Optimization & Configuration | v1.1 | 2/2 | Complete | 2026-03-04 |
 | 9. Build Optimization - Go Cache, ccache, mold | v1.1 | 2/2 | Complete | 2026-03-04 |
 | 10. Tech Debt Cleanup | v1.1 | 1/1 | Complete | 2026-03-04 |
-| 11. Build container-libs | v1.2 | 0/1 | Planned | - |
+| 11. Build container-libs | v1.2 | 1/1 | Complete | 2026-03-04 |
 | 12. Install Configuration Files | v1.2 | 0/? | Not started | - |
 | 13. Man Pages and Uninstall | v1.2 | 0/? | Not started | - |
 
