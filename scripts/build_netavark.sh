@@ -50,6 +50,17 @@ if [[ "${SCCACHE_ENABLED:-false}" == "true" ]] && command -v sccache &>/dev/null
     export RUSTC_WRAPPER=sccache
     echo "  sccache enabled for Rust compilation"
 fi
+
+# Enable mold linker for faster Rust linking when configured
+if [[ "${MOLD_ENABLED:-false}" == "true" ]] && command -v mold &>/dev/null; then
+    # Use project-level cargo config to avoid conflicts with sccache RUSTC_WRAPPER
+    mkdir -p .cargo
+    cat > .cargo/config.toml << 'TOML'
+[target.'cfg(target_os = "linux")']
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+TOML
+    echo "  mold linker enabled for Rust compilation"
+fi
 step_done
 
 step_start "Building"

@@ -169,6 +169,9 @@ safe_rm_dir "/var/cache/sccache" "sccache cache"
 safe_rm_dir "/var/cache/go-build" "Go build cache"
 safe_rm_dir "/var/cache/go-mod" "Go module cache"
 
+# Remove ccache cache
+safe_rm_dir "/var/cache/ccache" "ccache cache"
+
 # Remove configuration directories
 safe_rm_dir "/etc/cni" "cni config"
 safe_rm_dir "/etc/containers" "containers config"

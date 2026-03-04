@@ -38,6 +38,14 @@ step_start "Logging version"
 log_component "fuse-overlayfs"
 step_done
 
+step_start "Configuring ccache"
+# Enable ccache for C build caching when configured
+if [[ "${CCACHE_ENABLED:-false}" == "true" ]] && command -v ccache &>/dev/null; then
+    export CC="ccache gcc"
+    echo "  ccache enabled for C compilation"
+fi
+step_done
+
 step_start "Running autogen"
 ./autogen.sh
 step_done
