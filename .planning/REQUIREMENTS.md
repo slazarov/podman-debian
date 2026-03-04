@@ -55,7 +55,7 @@ Requirements for ARM support and non-interactive installation.
 - [x] **CLNP-01**: Remove build_runc.sh — crun is 50% faster, 8x less memory, Podman's default since 2021
 - [x] **CLNP-02**: Remove build_slirp4netns.sh — pasta is the documented replacement with better performance
 - [x] **CLNP-03**: Remove runc and slirp4netns references from install.sh and config.sh
-- [ ] **CLNP-04**: Clean up unused SCCACHE_ENABLED dead code (now implemented, see BLD)
+- [x] **CLNP-04**: Clean up unused SCCACHE_ENABLED dead code (now implemented, see BLD)
 
 ### Configuration (CONF)
 
@@ -74,10 +74,10 @@ Requirements for ARM support and non-interactive installation.
 
 ### Build Optimization (BLD)
 
-- [ ] **BLD-01**: Implement sccache for Rust builds (50-90% rebuild speedup)
-- [ ] **BLD-02**: Add sccache installation to install_rust.sh (via cargo install sccache)
-- [ ] **BLD-03**: Configure RUSTC_WRAPPER=sccache when SCCACHE_ENABLED=true
-- [ ] **BLD-04**: Add sccache directory setup and environment configuration
+- [x] **BLD-01**: Implement sccache for Rust builds (50-90% rebuild speedup)
+- [x] **BLD-02**: Add sccache installation to install_rust.sh (via cargo install sccache)
+- [x] **BLD-03**: Configure RUSTC_WRAPPER=sccache when SCCACHE_ENABLED=true
+- [x] **BLD-04**: Add sccache directory setup and environment configuration
 
 ---
 
@@ -145,7 +145,7 @@ Deferred to future release.
 | CLNP-01 | Phase 6 | Complete |
 | CLNP-02 | Phase 6 | Complete |
 | CLNP-03 | Phase 6 | Complete |
-| CLNP-04 | Phase 8 | Pending |
+| CLNP-04 | Phase 8 | Complete |
 | CONF-01 | Phase 8 | Complete |
 | CONF-02 | Phase 8 | Complete |
 | CONF-03 | Phase 8 | Complete |
@@ -155,10 +155,10 @@ Deferred to future release.
 | VAL-03 | Phase 7 | Complete |
 | VAL-04 | Phase 7 | Complete |
 | VAL-05 | Phase 7 | Complete |
-| BLD-01 | Phase 8 | Pending |
-| BLD-02 | Phase 8 | Pending |
-| BLD-03 | Phase 8 | Pending |
-| BLD-04 | Phase 8 | Pending |
+| BLD-01 | Phase 8 | Complete |
+| BLD-02 | Phase 8 | Complete |
+| BLD-03 | Phase 8 | Complete |
+| BLD-04 | Phase 8 | Complete |
 
 **Coverage:**
 - v1 requirements: 20 total (Complete)
@@ -168,4 +168,4 @@ Deferred to future release.
 
 ---
 *Requirements defined: 2025-02-28*
-*Last updated: 2026-03-04 - CONF-01 through CONF-04 completed (Phase 8 Plan 2)*
+*Last updated: 2026-03-04 - BLD-01 through BLD-04, CLNP-04 completed (Phase 8 Plan 1)*
