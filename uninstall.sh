@@ -172,6 +172,21 @@ safe_rm_dir "/var/cache/go-mod" "Go module cache"
 # Remove ccache cache
 safe_rm_dir "/var/cache/ccache" "ccache cache"
 
+# Remove mold and clang apt packages (installed by MOLD_ENABLED=true)
+if dpkg -s mold &>/dev/null; then
+    apt-get remove -y mold
+    REMOVED+=("apt package: mold")
+else
+    SKIPPED+=("apt package: mold (not installed)")
+fi
+
+if dpkg -s clang &>/dev/null; then
+    apt-get remove -y clang
+    REMOVED+=("apt package: clang")
+else
+    SKIPPED+=("apt package: clang (not installed)")
+fi
+
 # Remove configuration directories
 safe_rm_dir "/etc/cni" "cni config"
 safe_rm_dir "/etc/containers" "containers config"
