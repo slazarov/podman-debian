@@ -103,14 +103,5 @@ run_script "build_skopeo.sh"
 # Build Toolbox
 run_script "build_toolbox.sh"
 
-# ============================================
-# Install Configuration
-# ============================================
-
-echo ""
-echo "========================================"
-echo ">>> Installing containers configuration..."
-echo "========================================"
-mkdir -p /etc/containers
-cp "${toolpath}/config/containers.conf" /etc/containers/containers.conf
-echo ">>> containers.conf installed to /etc/containers/"
+# Install Container Configuration Files
+run_script "install_container-configs.sh"
