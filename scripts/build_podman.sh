@@ -57,8 +57,3 @@ step_done
 step_start "Installing"
 run_logged sudo make GO="$GOPATH/go" install PREFIX=/usr
 step_done
-
-step_start "Post-install configuration"
-sudo mkdir -p /etc/containers
-sudo cp "${toolpath}/config/containers.conf" /etc/containers/containers.conf
-step_done
