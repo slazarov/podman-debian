@@ -46,7 +46,9 @@
   1. Running the build script clones container-libs and completes without errors
   2. libgpgme-dev and libseccomp-dev are installed as build dependencies automatically
   3. seccomp.json exists as a generated artifact after build completes
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 11-01-PLAN.md -- Create build_container-libs.sh, add config variable, wire into setup.sh
 
 ### Phase 12: Install Configuration Files
 **Goal**: All container runtime config files are installed to their standard system paths
@@ -85,7 +87,7 @@
 | 8. Build Optimization & Configuration | v1.1 | 2/2 | Complete | 2026-03-04 |
 | 9. Build Optimization - Go Cache, ccache, mold | v1.1 | 2/2 | Complete | 2026-03-04 |
 | 10. Tech Debt Cleanup | v1.1 | 1/1 | Complete | 2026-03-04 |
-| 11. Build container-libs | v1.2 | 0/? | Not started | - |
+| 11. Build container-libs | v1.2 | 0/1 | Planned | - |
 | 12. Install Configuration Files | v1.2 | 0/? | Not started | - |
 | 13. Man Pages and Uninstall | v1.2 | 0/? | Not started | - |
 
