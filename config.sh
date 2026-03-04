@@ -189,6 +189,9 @@ export FUSE_OVERLAYFS_TAG="${FUSE_OVERLAYFS_TAG:-}"
 # Catatonit Version
 export CATATONIT_TAG="${CATATONIT_TAG:-}"
 
+# Container-Libs Version (containers-common config files and seccomp.json)
+export CONTAINER_LIBS_TAG="${CONTAINER_LIBS_TAG:-}"
+
 # Protoc Version and Path
 #export PROTOC_VERSION="33.1"
 #export PROTOC_TAG="v${PROTOC_VERSION}"
