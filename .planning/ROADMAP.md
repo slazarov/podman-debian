@@ -3,7 +3,7 @@
 ## Milestones
 
 - **v1.0 MVP** - Phases 1-5 (shipped 2026-03-03)
-- **v1.1 Ecosystem Audit** - Phases 6-9 (completed 2026-03-04)
+- **v1.1 Ecosystem Audit** - Phases 6-10 (in progress)
 
 ## Phases
 
@@ -18,13 +18,14 @@
 
 </details>
 
-### v1.1 Ecosystem Audit (Complete - 2026-03-04)
+### v1.1 Ecosystem Audit (In Progress - 2026-03-04)
 
 **Milestone Goal:** Research and optimize the Podman build ecosystem - remove deprecated components, add pre-flight validation, and implement build caching.
 
 - [x] **Phase 6: Component Cleanup** - Remove deprecated runc and slirp4netns components
 - [x] **Phase 7: Pre-flight Validation** - Add system requirement checks before installation
 - [x] **Phase 8: Build Optimization & Configuration** - Implement sccache and enhanced containers.conf
+- [ ] **Phase 10: Tech Debt Cleanup** - Resolve audit-identified integration gaps (mold/clang uninstall, redundant containers.conf copy)
 
 ## Phase Details
 
@@ -89,6 +90,20 @@ Plans:
 - [x] 09-01-PLAN.md -- Persist Go build/module cache across component builds
 - [x] 09-02-PLAN.md -- Add ccache for C builds and mold linker for Rust builds
 
+### Phase 10: Tech Debt Cleanup
+**Goal**: Asymmetric cleanup and redundant operations identified by milestone audit are resolved
+**Depends on**: Phase 9
+**Requirements**: CACHE-07, CACHE-08, CONF-03 (integration gap closure)
+**Gap Closure**: Closes MISSING-01 and BROKEN-01 from v1.1-MILESTONE-AUDIT.md
+**Success Criteria** (what must be TRUE):
+  1. Running uninstall.sh removes mold and clang apt packages when they were installed
+  2. containers.conf is installed exactly once during setup (no redundant copy)
+  3. All tech debt items from v1.1 audit are resolved
+**Plans**: TBD
+
+Plans:
+- [ ] TBD
+
 ## Progress
 
 **Execution Order:**
@@ -105,6 +120,7 @@ Phases execute in numeric order: 6 -> 7 -> 8 -> 9
 | 7. Pre-flight Validation | v1.1 | 1/1 | Complete | 2026-03-03 |
 | 8. Build Optimization & Configuration | v1.1 | 2/2 | Complete | 2026-03-04 |
 | 9. Build Optimization - Go Cache, ccache, mold | v1.1 | 2/2 | Complete | 2026-03-04 |
+| 10. Tech Debt Cleanup | v1.1 | 0/0 | Planned | - |
 
 ---
 
