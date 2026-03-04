@@ -1,193 +1,69 @@
 # Requirements: Podman Debian Compiler
 
-**Defined:** 2025-02-28
+**Defined:** 2026-03-04
 **Core Value:** Compile and install Podman on any Debian/Ubuntu system without user interaction.
 
----
+## v1.2 Requirements
 
-## v1 Requirements (COMPLETE)
+Requirements for v1.2 Include Common Libraries. Each maps to roadmap phases.
 
-Requirements for ARM support and non-interactive installation.
+### Build Integration
 
-### Architecture Support
+- [ ] **BUILD-01**: container-libs is cloned from source and built during setup
+- [ ] **BUILD-02**: seccomp.json is generated via container-libs Go codegen (`make seccomp.json`)
+- [ ] **BUILD-03**: Required C build dependencies (libgpgme-dev, libseccomp-dev) are installed automatically
 
-- [x] **ARCH-01**: Script detects system architecture (amd64 vs arm64)
-- [x] **ARCH-02**: Go installer uses correct architecture URL (linux-arm64 vs linux-amd64)
-- [x] **ARCH-03**: Protoc installer uses correct architecture URL (aarch_64 vs x86_64)
-- [x] **ARCH-04**: Rust installer uses correct architecture target (aarch64-unknown-linux-gnu)
-- [x] **ARCH-05**: Centralized architecture variable in config.sh
+### Configuration
 
-### Non-Interactive Mode
-
-- [x] **NINT-01**: All apt commands use DEBIAN_FRONTEND=noninteractive
-- [x] **NINT-02**: All apt commands use -y flag (no confirmation prompts)
-- [x] **NINT-03**: No script uses `read` or other blocking input
-- [x] **NINT-04**: Package configuration prompts pre-answered (debconf-set-selections where needed)
-
-### Error Handling
-
-- [x] **ERRO-01**: set -e enabled consistently across all scripts
-- [x] **ERRO-02**: Scripts fail immediately on any error
-- [x] **ERRO-03**: Error messages identify which script and line failed
-- [x] **ERRO-04**: install.sh propagates errors from sub-scripts
-
-### User Experience
-
-- [x] **UX-01**: Progress messages show current operation
-- [x] **UX-02**: Build output logged to files
-- [x] **UX-03**: Uninstall script exists and works
-
-### Build Time Optimization
-
-- [x] **PERF-01**: All Make-based builds use parallel compilation with make -j$(nproc)
-- [x] **PERF-02**: Git clones use shallow clone (--depth 1) to reduce network transfer
-- [x] **PERF-03**: Go builds use optimization flags (gcflags, ldflags, GOGC=off)
-- [x] **PERF-04**: Cargo builds use CARGO_BUILD_JOBS for parallel compilation
-
----
-
-## v1.1 Requirements (Ecosystem Audit)
-
-**Goal:** Research and optimize the Podman build ecosystem — audit dependencies, evaluate version pinning, compare runtimes, and identify optimization opportunities.
-
-### Cleanup (CLNP)
-
-- [x] **CLNP-01**: Remove build_runc.sh — crun is 50% faster, 8x less memory, Podman's default since 2021
-- [x] **CLNP-02**: Remove build_slirp4netns.sh — pasta is the documented replacement with better performance
-- [x] **CLNP-03**: Remove runc and slirp4netns references from install.sh and config.sh
-- [x] **CLNP-04**: Clean up unused SCCACHE_ENABLED dead code (now implemented, see BLD)
-
-### Configuration (CONF)
-
-- [x] **CONF-01**: Enhance config/containers.conf with runtime default (crun)
-- [x] **CONF-02**: Add network backend configuration (netavark) to containers.conf
-- [x] **CONF-03**: Install containers.conf to /etc/containers/containers.conf during setup
-- [x] **CONF-04**: Add seccomp_profile default configuration
-
-### Validation (VAL)
-
-- [x] **VAL-01**: Add pre-flight check for cgroups v2 availability (required for rootless)
-- [x] **VAL-02**: Add pre-flight check for subuid/subgid configuration (rootless requirement)
-- [x] **VAL-03**: Add pre-flight check for kernel FUSE support (fuse-overlayfs requirement)
-- [x] **VAL-04**: Add pre-flight check for minimum kernel version (5.11+ recommended)
-- [x] **VAL-05**: Add pre-flight check for noexec mount on /tmp and /home (builds fail)
-
-### Build Optimization (BLD)
-
-- [x] **BLD-01**: Implement sccache for Rust builds (50-90% rebuild speedup)
-- [x] **BLD-02**: Add sccache installation to install_rust.sh (via cargo install sccache)
-- [x] **BLD-03**: Configure RUSTC_WRAPPER=sccache when SCCACHE_ENABLED=true
-- [x] **BLD-04**: Add sccache directory setup and environment configuration
-
-### Build Caching (CACHE) — Phase 9
-
-- [x] **CACHE-01**: Persist GOCACHE to /var/cache/go-build across Go component builds (20x faster rebuilds)
-- [x] **CACHE-02**: Persist GOMODCACHE to /var/cache/go-mod across Go component builds (skip re-downloads)
-- [x] **CACHE-03**: Remove ephemeral GOCACHE overrides from Go build scripts (podman, buildah, skopeo, conmon, go-md2man)
-- [x] **CACHE-04**: Add CCACHE_ENABLED feature flag for C build caching (opt-in, default false)
-- [x] **CACHE-05**: Conditionally install ccache via apt when CCACHE_ENABLED=true
-- [x] **CACHE-06**: Activate ccache (CC=ccache gcc) in C build scripts (crun, catatonit, fuse-overlayfs, pasta)
-- [x] **CACHE-07**: Add MOLD_ENABLED feature flag for mold linker (opt-in, default false)
-- [x] **CACHE-08**: Conditionally install mold+clang via apt when MOLD_ENABLED=true
-- [x] **CACHE-09**: Activate mold linker via .cargo/config.toml in Rust build scripts (netavark, aardvark-dns)
-
----
-
-## v2 Requirements
-
-Deferred to future release.
-
-### Advanced Optimization
-
-- **PERF-05**: Profile-guided optimization (PGO) for crun/podman binaries
-- **PERF-06**: mold linker integration (5x faster than ld) -- MOVED to v1.1 CACHE-07/CACHE-08/CACHE-09
+- [ ] **CONFIG-01**: seccomp.json is installed to `/usr/share/containers/seccomp.json`
+- [ ] **CONFIG-02**: policy.json is installed to `/etc/containers/policy.json`
+- [ ] **CONFIG-03**: default.yaml is installed to `/etc/containers/registries.d/default.yaml`
+- [ ] **CONFIG-04**: storage.conf is installed to `/etc/containers/storage.conf`
+- [ ] **CONFIG-05**: registries.conf is installed to `/etc/containers/registries.conf`
 
 ### Documentation
 
-- **DOC-01**: Generate man pages during build (go-md2man integration)
-- **DOC-02**: Add --help documentation to all scripts
+- [ ] **DOCS-01**: Man pages from common and image libraries are installed to system man paths
 
-### Advanced Features
+### Uninstall
 
-- **ADVN-01**: Resumable builds (continue from failed step)
-- **ADVN-02**: Component selection (choose what to build)
-- **ADVN-03**: Checksum verification for downloaded tarballs
+- [ ] **UNINST-01**: Uninstall script removes all container-libs installed files and build directory
 
----
+## Future Requirements
+
+None identified for v1.2.
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| ARM 32-bit support (armv7l) | Focusing on 64-bit ARM only per PROJECT.md |
-| Version pinning | Always latest stable per PROJECT.md |
-| CI/CD integration | Personal use only per PROJECT.md |
-| Non-Debian/Ubuntu distros | Focus on Debian/Ubuntu per PROJECT.md |
-| GUI wizard | CLI only per PROJECT.md |
-| runc restoration | crun is superior in all metrics; fallback not needed |
-| slirp4netns restoration | pasta is the documented successor |
-| CNI networking | Removed in Podman 5.0 |
-| Parallel build orchestration | Complexity disproportionate to gain for personal tool |
-
----
+| Building container-libs Go libraries as importable packages | We only need the config files and generated artifacts, not the Go API |
+| Custom seccomp profile modifications | Default upstream profile is sufficient |
+| Registry mirror configuration | Template registries.conf is installed; user configures mirrors post-install |
+| Shortnames configuration (registries.conf.d) | Only Red Hat-specific shortnames exist in repo; not relevant for Debian |
 
 ## Traceability
 
+Which phases cover which requirements. Updated during roadmap creation.
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ARCH-01 | Phase 1 | Complete |
-| ARCH-02 | Phase 1 | Complete |
-| ARCH-03 | Phase 1 | Complete |
-| ARCH-04 | Phase 1 | Complete |
-| ARCH-05 | Phase 1 | Complete |
-| NINT-01 | Phase 2 | Complete |
-| NINT-02 | Phase 2 | Complete |
-| NINT-03 | Phase 2 | Complete |
-| NINT-04 | Phase 2 | Complete |
-| ERRO-01 | Phase 3 | Complete |
-| ERRO-02 | Phase 3 | Complete |
-| ERRO-03 | Phase 3 | Complete |
-| ERRO-04 | Phase 3 | Complete |
-| UX-01 | Phase 4 | Complete |
-| UX-02 | Phase 4 | Complete |
-| UX-03 | Phase 4 | Complete |
-| PERF-01 | Phase 5 | Complete |
-| PERF-02 | Phase 5 | Complete |
-| PERF-03 | Phase 5 | Complete |
-| PERF-04 | Phase 5 | Complete |
-| CLNP-01 | Phase 6 | Complete |
-| CLNP-02 | Phase 6 | Complete |
-| CLNP-03 | Phase 6 | Complete |
-| CLNP-04 | Phase 8 | Complete |
-| CONF-01 | Phase 8 | Complete |
-| CONF-02 | Phase 8 | Complete |
-| CONF-03 | Phase 8 | Complete |
-| CONF-04 | Phase 8 | Complete |
-| VAL-01 | Phase 7 | Complete |
-| VAL-02 | Phase 7 | Complete |
-| VAL-03 | Phase 7 | Complete |
-| VAL-04 | Phase 7 | Complete |
-| VAL-05 | Phase 7 | Complete |
-| BLD-01 | Phase 8 | Complete |
-| BLD-02 | Phase 8 | Complete |
-| BLD-03 | Phase 8 | Complete |
-| BLD-04 | Phase 8 | Complete |
-| CACHE-01 | Phase 9 | Complete |
-| CACHE-02 | Phase 9 | Complete |
-| CACHE-03 | Phase 9 | Complete |
-| CACHE-04 | Phase 9 | Complete |
-| CACHE-05 | Phase 9 | Complete |
-| CACHE-06 | Phase 9 | Complete |
-| CACHE-07 | Phase 9 | Complete |
-| CACHE-08 | Phase 9 | Complete |
-| CACHE-09 | Phase 9 | Complete |
+| BUILD-01 | — | Pending |
+| BUILD-02 | — | Pending |
+| BUILD-03 | — | Pending |
+| CONFIG-01 | — | Pending |
+| CONFIG-02 | — | Pending |
+| CONFIG-03 | — | Pending |
+| CONFIG-04 | — | Pending |
+| CONFIG-05 | — | Pending |
+| DOCS-01 | — | Pending |
+| UNINST-01 | — | Pending |
 
 **Coverage:**
-- v1 requirements: 20 total (Complete)
-- v1.1 requirements: 26 total (26 complete)
-- Mapped to phases: 46
-- Unmapped: 0
+- v1.2 requirements: 10 total
+- Mapped to phases: 0
+- Unmapped: 10 ⚠️
 
 ---
-*Requirements defined: 2025-02-28*
-*Last updated: 2026-03-04 - CACHE-04 through CACHE-09 completed (Phase 9 plan 02)*
+*Requirements defined: 2026-03-04*
+*Last updated: 2026-03-04 after initial definition*
