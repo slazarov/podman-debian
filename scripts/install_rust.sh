@@ -21,3 +21,20 @@ wget "https://static.rust-lang.org/rustup/dist/${RUSTUP_ARCH}/rustup-init" -O ru
 chmod +x rustup-init
 
 ./rustup-init -y
+
+# Install sccache for Rust build caching (optional)
+if [[ "${SCCACHE_ENABLED:-false}" == "true" ]]; then
+    step_start "Installing sccache v${SCCACHE_VERSION}"
+
+    wget "https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/sccache-v${SCCACHE_VERSION}-${SCCACHE_ARCH}.tar.gz" -O sccache.tar.gz
+    tar -xzf sccache.tar.gz
+    cp "sccache-v${SCCACHE_VERSION}-${SCCACHE_ARCH}/sccache" /usr/local/bin/sccache
+    chmod +x /usr/local/bin/sccache
+    rm -rf sccache.tar.gz "sccache-v${SCCACHE_VERSION}-${SCCACHE_ARCH}"
+
+    # Create cache directory
+    mkdir -p "${SCCACHE_DIR}"
+
+    echo "  sccache installed: $(sccache --version)"
+    step_done
+fi

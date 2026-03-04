@@ -53,10 +53,11 @@ step_start "Configuring Cargo optimization"
 # Set parallel jobs for cargo (uses NPROC by default)
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$NPROC}"
 
-# Optional sccache support - uncomment if configured
-# if [[ "${SCCACHE_ENABLED:-false}" == "true" ]] && command -v sccache &>/dev/null; then
-#     export RUSTC_WRAPPER=sccache
-# fi
+# Enable sccache for Rust build caching when configured
+if [[ "${SCCACHE_ENABLED:-false}" == "true" ]] && command -v sccache &>/dev/null; then
+    export RUSTC_WRAPPER=sccache
+    echo "  sccache enabled for Rust compilation"
+fi
 step_done
 
 step_start "Building"
