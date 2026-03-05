@@ -38,8 +38,13 @@ jobs:
           while IFS= read -r line; do
             # Skip comments and empty lines
             [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
-            # Strip 'export ' prefix and add to GITHUB_ENV
-            echo "${line#export }" >> "$GITHUB_ENV"
+            # Strip 'export ' prefix and surrounding quotes from values
+            line="${line#export }"
+            key="${line%%=*}"
+            val="${line#*=}"
+            val="${val%\"}"
+            val="${val#\"}"
+            echo "${key}=${val}" >> "$GITHUB_ENV"
           done < versions-stable.env
 
       - name: Update apt cache
@@ -87,8 +92,13 @@ jobs:
           while IFS= read -r line; do
             # Skip comments and empty lines
             [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
-            # Strip 'export ' prefix and add to GITHUB_ENV
-            echo "${line#export }" >> "$GITHUB_ENV"
+            # Strip 'export ' prefix and surrounding quotes from values
+            line="${line#export }"
+            key="${line%%=*}"
+            val="${line#*=}"
+            val="${val%\"}"
+            val="${val#\"}"
+            echo "${key}=${val}" >> "$GITHUB_ENV"
           done < versions-stable.env
 
       - name: Update apt cache
