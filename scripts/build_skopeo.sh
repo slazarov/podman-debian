@@ -59,9 +59,7 @@ step_done
 step_start "Installing"
 if [[ -n "${DESTDIR:-}" ]]; then
     run_logged make GO="$GOPATH/go" install PREFIX=/usr DESTDIR="${DESTDIR}"
-    run_logged make GO="$GOPATH/go" install.completions PREFIX=/usr DESTDIR="${DESTDIR}"
 else
     run_logged sudo make GO="$GOPATH/go" install PREFIX=/usr
-    run_logged sudo make GO="$GOPATH/go" install.completions PREFIX=/usr
 fi
 step_done
