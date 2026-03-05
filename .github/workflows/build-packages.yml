@@ -52,10 +52,16 @@ jobs:
 
       - name: Build all components
         run: |
-          export DEBIAN_FRONTEND=noninteractive
-          export DESTDIR="${{ runner.temp }}/podman-staging"
+          DESTDIR="${{ runner.temp }}/podman-staging"
           mkdir -p "$DESTDIR"
-          sudo -E ./setup.sh
+          TRACK="${{ inputs.build_track }}"
+          # Source versions inside sudo context to avoid env_reset stripping vars
+          sudo DEBIAN_FRONTEND=noninteractive DESTDIR="$DESTDIR" BUILD_TRACK="$TRACK" bash -c '
+            if [[ "$BUILD_TRACK" == "stable" ]]; then
+              source ./versions-stable.env
+            fi
+            ./setup.sh
+          '
         timeout-minutes: 150
 
       - name: Install nFPM
@@ -106,10 +112,16 @@ jobs:
 
       - name: Build all components
         run: |
-          export DEBIAN_FRONTEND=noninteractive
-          export DESTDIR="${{ runner.temp }}/podman-staging"
+          DESTDIR="${{ runner.temp }}/podman-staging"
           mkdir -p "$DESTDIR"
-          sudo -E ./setup.sh
+          TRACK="${{ inputs.build_track }}"
+          # Source versions inside sudo context to avoid env_reset stripping vars
+          sudo DEBIAN_FRONTEND=noninteractive DESTDIR="$DESTDIR" BUILD_TRACK="$TRACK" bash -c '
+            if [[ "$BUILD_TRACK" == "stable" ]]; then
+              source ./versions-stable.env
+            fi
+            ./setup.sh
+          '
         timeout-minutes: 150
 
       - name: Install nFPM
