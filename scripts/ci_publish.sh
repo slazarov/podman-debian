@@ -229,8 +229,19 @@ h1 { border-bottom: 2px solid #333; padding-bottom: 0.5rem; }
 code, pre { background: #f4f4f4; border-radius: 4px; }
 code { padding: 0.15em 0.4em; font-size: 0.9em; }
 pre { padding: 1rem; overflow-x: auto; }
-.suite { margin: 1.5rem 0; padding: 1rem; border: 1px solid #ddd; border-radius: 6px; }
-.suite h3 { margin-top: 0; }
+.tracks { display: flex; gap: 1rem; margin: 1.5rem 0; flex-wrap: wrap; }
+.track { flex: 1; min-width: 280px; padding: 1rem; border: 1px solid #ddd; border-radius: 6px; }
+.track h3 { margin-top: 0; }
+.track.recommended { border-color: #2ea44f; }
+.track.recommended h3::after { content: " (recommended)"; font-size: 0.8em; color: #2ea44f; font-weight: normal; }
+.tab-group { margin: 1.5rem 0; }
+.tab-buttons { display: flex; gap: 0; }
+.tab-btn { padding: 0.5rem 1.5rem; border: 1px solid #ddd; background: #f4f4f4; cursor: pointer; font-size: 0.95em; }
+.tab-btn:first-child { border-radius: 6px 0 0 0; }
+.tab-btn:last-child { border-radius: 0 6px 0 0; }
+.tab-btn.active { background: #fff; border-bottom-color: #fff; font-weight: 600; }
+.tab-content { display: none; border: 1px solid #ddd; border-top: none; border-radius: 0 0 6px 6px; padding: 1rem; }
+.tab-content.active { display: block; }
 a { color: #0366d6; }
 </style>
 </head>
@@ -238,16 +249,42 @@ a { color: #0366d6; }
 <h1>Podman for Debian — APT Repository</h1>
 <p>Pre-built <code>.deb</code> packages for Podman and its dependencies on Debian (amd64 &amp; arm64).</p>
 
-<h2>Quick Setup</h2>
-<pre><code># Import the signing key
-curl -fsSL https://REPO_URL_PLACEHOLDER/podman-debian.gpg | sudo tee /usr/share/keyrings/podman-debian.gpg > /dev/null
+<h2>Choose a Track</h2>
+<div class="tracks">
+  <div class="track recommended">
+    <h3>stable</h3>
+    <p>Pinned, tested versions. Best for production and daily use.</p>
+  </div>
+  <div class="track">
+    <h3>edge</h3>
+    <p>Latest upstream tags. For testing new features before they reach stable.</p>
+  </div>
+</div>
 
-# Add the repository (stable track)
-echo "deb [signed-by=/usr/share/keyrings/podman-debian.gpg] https://REPO_URL_PLACEHOLDER stable main" \
-  | sudo tee /etc/apt/sources.list.d/podman-debian.list
+<h2>Setup</h2>
 
-# Install
-sudo apt-get update
+<p>1. Import the signing key:</p>
+<pre><code>curl -fsSL https://REPO_URL_PLACEHOLDER/podman-debian.gpg \
+  | sudo tee /usr/share/keyrings/podman-debian.gpg > /dev/null</code></pre>
+
+<p>2. Add the repository — pick your track:</p>
+<div class="tab-group">
+  <div class="tab-buttons">
+    <button class="tab-btn active" onclick="showTab('stable')">stable</button>
+    <button class="tab-btn" onclick="showTab('edge')">edge</button>
+  </div>
+  <div id="tab-stable" class="tab-content active">
+    <pre><code>echo "deb [signed-by=/usr/share/keyrings/podman-debian.gpg] https://REPO_URL_PLACEHOLDER stable main" \
+  | sudo tee /etc/apt/sources.list.d/podman-debian.list</code></pre>
+  </div>
+  <div id="tab-edge" class="tab-content">
+    <pre><code>echo "deb [signed-by=/usr/share/keyrings/podman-debian.gpg] https://REPO_URL_PLACEHOLDER edge main" \
+  | sudo tee /etc/apt/sources.list.d/podman-debian.list</code></pre>
+  </div>
+</div>
+
+<p>3. Install:</p>
+<pre><code>sudo apt-get update
 sudo apt-get install podman</code></pre>
 
 <h2>Available Suites</h2>
@@ -257,10 +294,7 @@ HTMLEOF
 for s in "${available_suites[@]}"; do
     pkg_count=$(find "${OUTPUT_DIR}/pool" -name "*.deb" -path "*/${s}/*" 2>/dev/null | wc -l || echo "0")
     cat >> "${OUTPUT_DIR}/index.html" << SUITEEOF
-<div class="suite">
-<h3>${s}</h3>
-<p>Packages: ${pkg_count} | <a href="dists/${s}/InRelease">InRelease</a></p>
-</div>
+<p><strong>${s}</strong> — ${pkg_count} packages | <a href="dists/${s}/InRelease">InRelease</a></p>
 SUITEEOF
 done
 
@@ -271,6 +305,15 @@ cat >> "${OUTPUT_DIR}/index.html" << 'HTMLEOF'
 <li><a href="podman-debian.gpg">GPG signing key</a></li>
 <li><a href="https://github.com/slazarov/podman-debian">Source repository</a></li>
 </ul>
+
+<script>
+function showTab(track) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector('.tab-btn[onclick*="' + track + '"]').classList.add('active');
+  document.getElementById('tab-' + track).classList.add('active');
+}
+</script>
 </body>
 </html>
 HTMLEOF
