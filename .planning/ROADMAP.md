@@ -45,7 +45,7 @@
 **Milestone Goal:** Package all compiled Podman components as .deb packages, automate builds with GitHub Actions, and distribute via a GitHub Pages APT repository.
 
 - [x] **Phase 14: Debian Package Building** — DESTDIR staging, nFPM configs, and verified .deb packages for all 12 components + meta-package (completed 2026-03-05)
-- [ ] **Phase 15: APT Repository and Signing** — GPG-signed reprepro repository with stable and edge suites, user setup documentation
+- [x] **Phase 15: APT Repository and Signing** — GPG-signed reprepro repository with stable and edge suites, user setup documentation (completed 2026-03-05)
 - [ ] **Phase 16: CI/CD Pipeline** — GitHub Actions workflows with native ARM64 runners, manual trigger, and dual build tracks
 - [ ] **Phase 17: Upstream Automation** — Scheduled version detection, auto-triggered edge builds, and version state tracking
 
@@ -79,8 +79,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 15-01-PLAN.md — Reprepro configuration, repository management script, and user setup documentation
-- [ ] 15-02-PLAN.md — GPG Ed25519 key generation and GitHub Secrets setup
+- [x] 15-01-PLAN.md — Reprepro configuration, repository management script, and user setup documentation
+- [x] 15-02-PLAN.md — GPG Ed25519 key generation and GitHub Secrets setup
 
 ### Phase 16: CI/CD Pipeline
 **Goal**: Packages for both architectures are built and published to the APT repository automatically when a workflow is triggered
@@ -91,11 +91,11 @@ Plans:
   2. If either architecture build fails, the publish step does not run and the existing repository remains intact (atomic publishing)
   3. The workflow accepts a parameter choosing between stable (user-pinned versions) and edge (latest upstream tags) build tracks, producing packages in the corresponding APT suite
   4. Build artifacts (individual .deb files) are retained as downloadable GitHub Actions artifacts for debugging
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 16-01: TBD
-- [ ] 16-02: TBD
+- [ ] 16-01-PLAN.md — Stable version pinning file and CI two-suite publish script
+- [ ] 16-02-PLAN.md — GitHub Actions three-job workflow (build-amd64, build-arm64, publish)
 
 ### Phase 17: Upstream Automation
 **Goal**: New upstream releases are detected automatically and trigger edge suite rebuilds without manual intervention
@@ -131,8 +131,8 @@ Phases execute in numeric order: 14 -> 15 -> 16 -> 17
 | 12. Install Configuration Files | v1.2 | 1/1 | Complete | 2026-03-04 |
 | 13. Man Pages and Uninstall | v1.2 | 1/1 | Complete | 2026-03-04 |
 | 14. Debian Package Building | v2.0 | 2/2 | Complete | 2026-03-05 |
-| 15. APT Repository and Signing | 1/2 | In Progress|  | - |
-| 16. CI/CD Pipeline | v2.0 | 0/? | Not started | - |
+| 15. APT Repository and Signing | v2.0 | 2/2 | Complete | 2026-03-05 |
+| 16. CI/CD Pipeline | v2.0 | 0/2 | Not started | - |
 | 17. Upstream Automation | v2.0 | 0/? | Not started | - |
 
 ---
