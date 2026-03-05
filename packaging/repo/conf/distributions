@@ -1,0 +1,17 @@
+Origin: podman-debian
+Label: Podman Debian
+Suite: stable
+Codename: stable
+Architectures: amd64 arm64
+Components: main
+Description: Podman compiled from source for Ubuntu 24.04 - stable releases
+SignWith: yes
+
+Origin: podman-debian
+Label: Podman Debian
+Suite: edge
+Codename: edge
+Architectures: amd64 arm64
+Components: main
+Description: Podman compiled from source for Ubuntu 24.04 - latest upstream
+SignWith: yes

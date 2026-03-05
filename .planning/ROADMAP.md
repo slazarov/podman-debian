@@ -65,7 +65,7 @@
 
 Plans:
 - [x] 14-01-PLAN.md — DESTDIR staging support in all build scripts + 13 nFPM YAML package configs
-- [ ] 14-02-PLAN.md — Packaging orchestrator script (version extraction, nFPM invocation)
+- [x] 14-02-PLAN.md — Packaging orchestrator script (version extraction, nFPM invocation)
 
 ### Phase 15: APT Repository and Signing
 **Goal**: Users can add a GPG-signed APT repository and install packages via standard apt commands from either the stable or edge suite
@@ -76,10 +76,11 @@ Plans:
   2. Repository serves two suites (stable and edge) at the same URL, and apt install from either suite installs the correct package versions
   3. Following the documented DEB822 .sources setup instructions, a user on a fresh Ubuntu 24.04 system can add the repo, import the GPG key via signed-by, and install podman-suite in under 5 commands
   4. Public GPG key is downloadable from the repository root URL for user import
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 15-01: TBD
+- [ ] 15-01-PLAN.md — Reprepro configuration, repository management script, and user setup documentation
+- [ ] 15-02-PLAN.md — GPG Ed25519 key generation and GitHub Secrets setup
 
 ### Phase 16: CI/CD Pipeline
 **Goal**: Packages for both architectures are built and published to the APT repository automatically when a workflow is triggered
@@ -129,8 +130,8 @@ Phases execute in numeric order: 14 -> 15 -> 16 -> 17
 | 11. Build container-libs | v1.2 | 1/1 | Complete | 2026-03-04 |
 | 12. Install Configuration Files | v1.2 | 1/1 | Complete | 2026-03-04 |
 | 13. Man Pages and Uninstall | v1.2 | 1/1 | Complete | 2026-03-04 |
-| 14. Debian Package Building | 2/2 | Complete    | 2026-03-05 | - |
-| 15. APT Repository and Signing | v2.0 | 0/? | Not started | - |
+| 14. Debian Package Building | v2.0 | 2/2 | Complete | 2026-03-05 |
+| 15. APT Repository and Signing | v2.0 | 0/2 | Not started | - |
 | 16. CI/CD Pipeline | v2.0 | 0/? | Not started | - |
 | 17. Upstream Automation | v2.0 | 0/? | Not started | - |
 
