@@ -42,6 +42,9 @@ jobs:
             echo "${line#export }" >> "$GITHUB_ENV"
           done < versions-stable.env
 
+      - name: Update apt cache
+        run: sudo apt-get update
+
       - name: Build all components
         run: |
           export DEBIAN_FRONTEND=noninteractive
@@ -87,6 +90,9 @@ jobs:
             # Strip 'export ' prefix and add to GITHUB_ENV
             echo "${line#export }" >> "$GITHUB_ENV"
           done < versions-stable.env
+
+      - name: Update apt cache
+        run: sudo apt-get update
 
       - name: Build all components
         run: |
