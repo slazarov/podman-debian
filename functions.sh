@@ -291,9 +291,24 @@ log_build_output() {
 }
 
 run_logged() {
-    # Runs command with output going only to log file (suppresses console output)
+    # Runs command with output going to log file (suppresses console output on success).
+    # On failure, dumps the last 40 lines of the log to stderr for CI visibility.
     # Usage: run_logged make [args...]
-    "$@" >> "$BUILD_LOG" 2>&1
+    local rc=0
+    "$@" >> "$BUILD_LOG" 2>&1 || rc=$?
+    if [[ $rc -ne 0 ]]; then
+        echo "" >&2
+        echo "========================================" >&2
+        echo "COMMAND FAILED: $*" >&2
+        echo "EXIT CODE: ${rc}" >&2
+        echo "BUILD LOG (last 40 lines):" >&2
+        echo "========================================" >&2
+        tail -40 "$BUILD_LOG" >&2
+        echo "========================================" >&2
+        echo "Full log: ${BUILD_LOG}" >&2
+        echo "========================================" >&2
+        return $rc
+    fi
 }
 
 # ============================================

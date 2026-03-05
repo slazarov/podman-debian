@@ -45,9 +45,12 @@ run_logged make -j "$NPROC" GCFLAGS="${GO_GCFLAGS}" LDFLAGS="${GO_LDFLAGS}"
 step_done
 
 step_start "Installing"
+# Use install.bin to install only the binary (skip docs target which requires go-md2man).
+# conmon v2.2.1+ removed the conditional go-md2man guard, making `make install` fail
+# when go-md2man is not yet built. Man pages are handled separately by install_container-manpages.sh.
 if [[ -n "${DESTDIR:-}" ]]; then
-    run_logged make install PREFIX=/usr DESTDIR="${DESTDIR}"
+    run_logged make install.bin PREFIX=/usr DESTDIR="${DESTDIR}"
 else
-    run_logged sudo make install PREFIX=/usr
+    run_logged sudo make install.bin PREFIX=/usr
 fi
 step_done
