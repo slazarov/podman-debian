@@ -1,0 +1,157 @@
+name: Build and Publish Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_track:
+        description: 'Build track (stable = pinned versions, edge = latest upstream)'
+        required: true
+        type: choice
+        options:
+          - stable
+          - edge
+        default: stable
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  # ============================================
+  # Build on native amd64 runner
+  # ============================================
+  build-amd64:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set version tags (stable)
+        if: inputs.build_track == 'stable'
+        run: |
+          # Source pinned versions into GITHUB_ENV for all subsequent steps
+          while IFS= read -r line; do
+            # Skip comments and empty lines
+            [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+            # Strip 'export ' prefix and add to GITHUB_ENV
+            echo "${line#export }" >> "$GITHUB_ENV"
+          done < versions-stable.env
+
+      - name: Build all components
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          export DESTDIR="${{ runner.temp }}/podman-staging"
+          mkdir -p "$DESTDIR"
+          sudo -E ./setup.sh
+        timeout-minutes: 150
+
+      - name: Install nFPM
+        run: |
+          # Use Go installed by setup.sh
+          export PATH="/opt/go/$(ls /opt/go/)/bin:$HOME/go/bin:$PATH"
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.45.0
+
+      - name: Package all components
+        run: |
+          export PATH="/opt/go/$(ls /opt/go/)/bin:$HOME/go/bin:$PATH"
+          export DESTDIR="${{ runner.temp }}/podman-staging"
+          ./scripts/package_all.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debs-amd64
+          path: output/*.deb
+          retention-days: 30
+
+  # ============================================
+  # Build on native arm64 runner
+  # ============================================
+  build-arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set version tags (stable)
+        if: inputs.build_track == 'stable'
+        run: |
+          # Source pinned versions into GITHUB_ENV for all subsequent steps
+          while IFS= read -r line; do
+            # Skip comments and empty lines
+            [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+            # Strip 'export ' prefix and add to GITHUB_ENV
+            echo "${line#export }" >> "$GITHUB_ENV"
+          done < versions-stable.env
+
+      - name: Build all components
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          export DESTDIR="${{ runner.temp }}/podman-staging"
+          mkdir -p "$DESTDIR"
+          sudo -E ./setup.sh
+        timeout-minutes: 150
+
+      - name: Install nFPM
+        run: |
+          # Use Go installed by setup.sh
+          export PATH="/opt/go/$(ls /opt/go/)/bin:$HOME/go/bin:$PATH"
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.45.0
+
+      - name: Package all components
+        run: |
+          export PATH="/opt/go/$(ls /opt/go/)/bin:$HOME/go/bin:$PATH"
+          export DESTDIR="${{ runner.temp }}/podman-staging"
+          ./scripts/package_all.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debs-arm64
+          path: output/*.deb
+          retention-days: 30
+
+  # ============================================
+  # Publish APT repository to GitHub Pages
+  # ============================================
+  publish:
+    needs: [build-amd64, build-arm64]
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: debs-*
+          path: all-debs/
+          merge-multiple: true
+
+      - name: Install reprepro
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y reprepro
+
+      - name: Build and publish repository
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          ./scripts/ci_publish.sh \
+            "${{ inputs.build_track }}" \
+            "all-debs" \
+            "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}" \
+            "repo-output"
+
+      - uses: actions/configure-pages@v4
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: repo-output/
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
