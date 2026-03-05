@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Prevent recursive sourcing
+# Prevent recursive sourcing (not exported — child processes must source independently)
 [[ -n "${_FUNCTIONS_SH_SOURCED:-}" ]] && return 0
-export _FUNCTIONS_SH_SOURCED=1
+_FUNCTIONS_SH_SOURCED=1
 
 # Determine toolpath if not set already
 relativepath="./" # Define relative path to go from this script to the root level of the tool

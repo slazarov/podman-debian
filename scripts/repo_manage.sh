@@ -82,7 +82,16 @@ echo ""
 
 if [[ -n "${GPG_PRIVATE_KEY:-}" ]]; then
     echo ">>> Importing GPG private key from environment..."
-    echo "${GPG_PRIVATE_KEY}" | gpg --batch --import
+    # Try base64-encoded first (recommended for CI), then raw ASCII-armored
+    if echo "${GPG_PRIVATE_KEY}" | base64 -d 2>/dev/null | gpg --batch --import 2>/dev/null; then
+        echo "  (imported from base64-encoded key)"
+    elif printf '%s' "${GPG_PRIVATE_KEY}" | gpg --batch --import; then
+        echo "  (imported from ASCII-armored key)"
+    else
+        echo "ERROR: Failed to import GPG key. Store secret as:" >&2
+        echo "  gpg --export-secret-keys --armor KEY_ID | base64 -w0" >&2
+        exit 1
+    fi
 
     # Set ownertrust to ultimate to avoid "not ultimately trusted" warnings
     GPG_KEY_ID=$(gpg --list-keys --with-colons | grep fpr | head -1 | cut -d: -f10)
