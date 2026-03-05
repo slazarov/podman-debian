@@ -54,14 +54,20 @@ jobs:
         run: |
           DESTDIR="${{ runner.temp }}/podman-staging"
           mkdir -p "$DESTDIR"
-          TRACK="${{ inputs.build_track }}"
-          # Source versions inside sudo context to avoid env_reset stripping vars
-          sudo DEBIAN_FRONTEND=noninteractive DESTDIR="$DESTDIR" BUILD_TRACK="$TRACK" bash -c '
-            if [[ "$BUILD_TRACK" == "stable" ]]; then
-              source ./versions-stable.env
-            fi
-            ./setup.sh
-          '
+          # Build env args for sudo env (bypasses env_reset completely)
+          ENV_ARGS="DEBIAN_FRONTEND=noninteractive DESTDIR=$DESTDIR"
+          if [[ "${{ inputs.build_track }}" == "stable" ]]; then
+            while IFS= read -r line; do
+              [[ "$line" =~ ^[[:space:]]*# || -z "$line" ]] && continue
+              line="${line#export }"
+              key="${line%%=*}"
+              val="${line#*=}"
+              val="${val%\"}"
+              val="${val#\"}"
+              ENV_ARGS="$ENV_ARGS ${key}=${val}"
+            done < versions-stable.env
+          fi
+          sudo env $ENV_ARGS ./setup.sh
         timeout-minutes: 150
 
       - name: Install nFPM
@@ -114,14 +120,20 @@ jobs:
         run: |
           DESTDIR="${{ runner.temp }}/podman-staging"
           mkdir -p "$DESTDIR"
-          TRACK="${{ inputs.build_track }}"
-          # Source versions inside sudo context to avoid env_reset stripping vars
-          sudo DEBIAN_FRONTEND=noninteractive DESTDIR="$DESTDIR" BUILD_TRACK="$TRACK" bash -c '
-            if [[ "$BUILD_TRACK" == "stable" ]]; then
-              source ./versions-stable.env
-            fi
-            ./setup.sh
-          '
+          # Build env args for sudo env (bypasses env_reset completely)
+          ENV_ARGS="DEBIAN_FRONTEND=noninteractive DESTDIR=$DESTDIR"
+          if [[ "${{ inputs.build_track }}" == "stable" ]]; then
+            while IFS= read -r line; do
+              [[ "$line" =~ ^[[:space:]]*# || -z "$line" ]] && continue
+              line="${line#export }"
+              key="${line%%=*}"
+              val="${line#*=}"
+              val="${val%\"}"
+              val="${val#\"}"
+              ENV_ARGS="$ENV_ARGS ${key}=${val}"
+            done < versions-stable.env
+          fi
+          sudo env $ENV_ARGS ./setup.sh
         timeout-minutes: 150
 
       - name: Install nFPM
