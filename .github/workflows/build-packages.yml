@@ -121,72 +121,84 @@ jobs:
           retention-days: 30
 
   # ============================================
-  # Build on native arm64 runner (temporarily disabled to save CI minutes)
+  # Build on native arm64 runner
   # ============================================
-  # TODO: Re-enable arm64 builds once amd64 pipeline is stable
-  # build-arm64:
-  #   runs-on: ubuntu-24.04-arm
-  #   timeout-minutes: 180
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #
-  #     - name: Set version tags (stable)
-  #       if: inputs.build_track == 'stable'
-  #       run: |
-  #         while IFS= read -r line; do
-  #           [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
-  #           line="${line#export }"
-  #           key="${line%%=*}"
-  #           val="${line#*=}"
-  #           val="${val%\"}"
-  #           val="${val#\"}"
-  #           echo "${key}=${val}" >> "$GITHUB_ENV"
-  #         done < versions-stable.env
-  #
-  #     - name: Update apt cache
-  #       run: sudo apt-get update
-  #
-  #     - name: Build all components
-  #       run: |
-  #         DESTDIR="${{ runner.temp }}/podman-staging"
-  #         mkdir -p "$DESTDIR"
-  #         ENV_ARGS="DEBIAN_FRONTEND=noninteractive DESTDIR=$DESTDIR"
-  #         if [[ "${{ inputs.build_track }}" == "stable" ]]; then
-  #           while IFS= read -r line; do
-  #             [[ "$line" =~ ^[[:space:]]*# || -z "$line" ]] && continue
-  #             line="${line#export }"
-  #             key="${line%%=*}"
-  #             val="${line#*=}"
-  #             val="${val%\"}"
-  #             val="${val#\"}"
-  #             ENV_ARGS="$ENV_ARGS ${key}=${val}"
-  #           done < versions-stable.env
-  #         fi
-  #         sudo env $ENV_ARGS ./setup.sh
-  #       timeout-minutes: 150
-  #
-  #     - name: Install nFPM
-  #       run: |
-  #         export PATH="/opt/go/$(ls /opt/go/)/bin:$HOME/go/bin:$PATH"
-  #         go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.45.0
-  #
-  #     - name: Package all components
-  #       run: |
-  #         export PATH="/opt/go/$(ls /opt/go/)/bin:$HOME/go/bin:$PATH"
-  #         export DESTDIR="${{ runner.temp }}/podman-staging"
-  #         ./scripts/package_all.sh
-  #
-  #     - uses: actions/upload-artifact@v4
-  #       with:
-  #         name: debs-arm64
-  #         path: output/*.deb
-  #         retention-days: 30
+  build-arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set version tags (stable)
+        if: inputs.build_track == 'stable'
+        run: |
+          while IFS= read -r line; do
+            [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+            line="${line#export }"
+            key="${line%%=*}"
+            val="${line#*=}"
+            val="${val%\"}"
+            val="${val#\"}"
+            echo "${key}=${val}" >> "$GITHUB_ENV"
+          done < versions-stable.env
+
+      - name: Cache Go modules and build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-mod
+            ~/.cache/go-build
+          key: go-${{ runner.arch }}-${{ hashFiles('versions-stable.env') }}
+          restore-keys: |
+            go-${{ runner.arch }}-
+
+      - name: Update apt cache
+        run: sudo apt-get update
+
+      - name: Build all components
+        run: |
+          DESTDIR="${{ runner.temp }}/podman-staging"
+          mkdir -p "$DESTDIR"
+          mkdir -p "$HOME/.cache/go-build" "$HOME/.cache/go-mod"
+          ENV_ARGS="DEBIAN_FRONTEND=noninteractive DESTDIR=$DESTDIR"
+          ENV_ARGS="$ENV_ARGS GOCACHE=$HOME/.cache/go-build GOMODCACHE=$HOME/.cache/go-mod"
+          if [[ "${{ inputs.build_track }}" == "stable" ]]; then
+            while IFS= read -r line; do
+              [[ "$line" =~ ^[[:space:]]*# || -z "$line" ]] && continue
+              line="${line#export }"
+              key="${line%%=*}"
+              val="${line#*=}"
+              val="${val%\"}"
+              val="${val#\"}"
+              ENV_ARGS="$ENV_ARGS ${key}=${val}"
+            done < versions-stable.env
+          fi
+          sudo env $ENV_ARGS ./setup.sh
+          sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/go-build" "$HOME/.cache/go-mod"
+        timeout-minutes: 150
+
+      - name: Install nFPM
+        run: |
+          export PATH="/opt/go/$(ls /opt/go/)/bin:$HOME/go/bin:$PATH"
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.45.0
+
+      - name: Package all components
+        run: |
+          export PATH="/opt/go/$(ls /opt/go/)/bin:$HOME/go/bin:$PATH"
+          export DESTDIR="${{ runner.temp }}/podman-staging"
+          ./scripts/package_all.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debs-arm64
+          path: output/*.deb
+          retention-days: 30
 
   # ============================================
   # Publish APT repository to GitHub Pages
   # ============================================
   publish:
-    needs: [build-amd64]  # TODO: re-add build-arm64 when re-enabled
+    needs: [build-amd64, build-arm64]
     runs-on: ubuntu-24.04
     environment:
       name: github-pages
