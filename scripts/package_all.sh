@@ -72,7 +72,7 @@ extract_version_nightly() {
 
     case "${component}" in
         podman)
-            base_version=$(grep 'RawVersion' "${repo_path}/version/rawversion/version.go" \
+            base_version=$(grep 'RawVersion.*=' "${repo_path}/version/rawversion/version.go" \
                 | sed 's/.*"\(.*\)".*/\1/' | sed 's/-dev//')
             ;;
         buildah)
