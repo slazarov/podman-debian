@@ -174,19 +174,10 @@ if [[ ${total_other_count} -gt 0 ]]; then
     echo ">>> Adding other suites' packages to repository..."
     echo ""
 
-    # Rebuild conf/ and db/ (repo_manage.sh cleans them up after running)
+    # Rebuild conf/ (repo_manage.sh cleans it up after running)
     mkdir -p "${OUTPUT_DIR}/conf"
     cp "${REPO_CONF}/conf/distributions" "${OUTPUT_DIR}/conf/"
     cp "${REPO_CONF}/conf/options" "${OUTPUT_DIR}/conf/"
-
-    # Re-add current suite's packages so reprepro's fresh db knows about them
-    echo ">>> Re-adding '${SUITE}' suite packages to reprepro db..."
-    for deb_file in "${DEB_DIR}"/*.deb; do
-        if [[ -f "${deb_file}" ]]; then
-            reprepro -Vb "${OUTPUT_DIR}" includedeb "${SUITE}" "${deb_file}"
-        fi
-    done
-    echo ""
 
     for other_suite in "${OTHER_SUITES[@]}"; do
         suite_count=${OTHER_SUITE_COUNTS["${other_suite}"]}
@@ -205,14 +196,13 @@ if [[ ${total_other_count} -gt 0 ]]; then
             fi
         done
         echo ">>> Added ${other_added} packages to '${other_suite}' suite"
+
+        # Export only this suite (not all — exporting all would clobber the current
+        # suite's Packages file since the fresh db doesn't know about it)
+        echo ">>> Exporting metadata for '${other_suite}' suite..."
+        reprepro -b "${OUTPUT_DIR}" export "${other_suite}"
         echo ""
     done
-
-    # Re-export metadata for all suites
-    echo ">>> Re-exporting repository metadata for all suites..."
-    reprepro -b "${OUTPUT_DIR}" export
-    echo ">>> Metadata exported"
-    echo ""
 
     # Clean up reprepro internals
     rm -rf "${OUTPUT_DIR}/db" "${OUTPUT_DIR}/conf"
