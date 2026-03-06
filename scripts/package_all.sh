@@ -91,13 +91,13 @@ extract_version_nightly() {
             base_version=$(cat "${repo_path}/VERSION" | tr -d '[:space:]')
             ;;
         fuse-overlayfs)
-            # AC_INIT([fuse-overlayfs], [1.17-dev], ...) -> extract second bracket group
+            # AC_INIT([fuse-overlayfs], [1.17-dev], [...]) -> extract second bracket group
             base_version=$(grep 'AC_INIT' "${repo_path}/configure.ac" \
-                | sed 's/.*\], \[\([^]]*\)\].*/\1/' | sed 's/-dev//')
+                | sed 's/^[^[]*\[[^]]*\], *\[\([^]]*\)\].*/\1/' | sed 's/-dev//')
             ;;
         catatonit)
             base_version=$(grep 'AC_INIT' "${repo_path}/configure.ac" \
-                | sed 's/.*\], \[\([^]]*\)\].*/\1/' | sed 's/+dev//')
+                | sed 's/^[^[]*\[[^]]*\], *\[\([^]]*\)\].*/\1/' | sed 's/+dev//')
             ;;
         crun)
             base_version=$(git -C "${repo_path}" describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
