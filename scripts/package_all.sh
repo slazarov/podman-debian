@@ -59,9 +59,15 @@ extract_version() {
 # git repository in BUILD_ROOT.
 
 # Map component names to their build directory names
-# (most match 1:1 except these two)
+# (most match 1:1 except these)
 declare -A COMPONENT_BUILD_DIRS=(
     ["container-configs"]="container-libs"
+)
+
+# Tag prefix filters for repos with namespaced tags (e.g., common/v0.67.0)
+# Only used as a fallback when git describe can't find a tag at HEAD
+declare -A COMPONENT_TAG_PREFIXES=(
+    ["container-configs"]="common/"
 )
 
 resolve_tag_from_repo() {
@@ -85,6 +91,17 @@ resolve_tag_from_repo() {
     if [[ -z "${tag}" ]]; then
         # Fallback: get the most recent tag reachable from HEAD
         tag=$(git -C "${repo_path}" describe --tags --abbrev=0 HEAD 2>/dev/null) || true
+    fi
+
+    if [[ -z "${tag}" ]]; then
+        # Final fallback: list all tags sorted by version, optionally filtered by prefix
+        # Needed for repos with namespaced tags (e.g., common/v0.67.0) or shallow clones
+        # where git describe can't reach any tag from HEAD
+        local prefix=""
+        if [[ -v "COMPONENT_TAG_PREFIXES[$component]" ]]; then
+            prefix="${COMPONENT_TAG_PREFIXES[$component]}"
+        fi
+        tag=$(git -C "${repo_path}" tag --list "${prefix}*" --sort=-version:refname | grep -v rc | head -1) || true
     fi
 
     echo "${tag}"
