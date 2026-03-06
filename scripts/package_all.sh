@@ -311,7 +311,7 @@ for component in "${COMPONENTS[@]}"; do
 
     # Nightly builds: extract version from source files instead of tags
     if [[ "${NIGHTLY_BUILD:-false}" == "true" ]]; then
-        local build_dir="${component}"
+        build_dir="${component}"
         if [[ -v "COMPONENT_BUILD_DIRS[$component]" ]]; then
             build_dir="${COMPONENT_BUILD_DIRS[$component]}"
         fi
@@ -358,7 +358,7 @@ done
 
 # Use podman's version for the suite meta-package
 if [[ "${NIGHTLY_BUILD:-false}" == "true" ]]; then
-    local build_dir="podman"
+    build_dir="podman"
     if [[ -v "COMPONENT_BUILD_DIRS[podman]" ]]; then
         build_dir="${COMPONENT_BUILD_DIRS[podman]}"
     fi
