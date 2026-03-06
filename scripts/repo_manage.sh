@@ -23,7 +23,7 @@ trap 'error_handler $? $LINENO "$BASH_SOURCE"' ERR
 usage() {
     echo "Usage: $(basename "$0") <suite> <deb-directory> [output-directory]"
     echo ""
-    echo "  suite            Target suite: 'stable' or 'edge'"
+    echo "  suite            Target suite: 'stable', 'edge', or 'nightly'"
     echo "  deb-directory    Path containing .deb files to add"
     echo "  output-directory Where to create the repository (default: \${toolpath}/repo-output)"
     echo ""
@@ -53,8 +53,8 @@ echo "========================================"
 echo ""
 
 # Validate suite name
-if [[ "${SUITE}" != "stable" && "${SUITE}" != "edge" ]]; then
-    echo "ERROR: Invalid suite '${SUITE}'. Must be 'stable' or 'edge'." >&2
+if [[ "${SUITE}" != "stable" && "${SUITE}" != "edge" && "${SUITE}" != "nightly" ]]; then
+    echo "ERROR: Invalid suite '${SUITE}'. Must be 'stable', 'edge', or 'nightly'." >&2
     exit 1
 fi
 
