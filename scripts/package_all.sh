@@ -51,6 +51,46 @@ extract_version() {
 }
 
 # ============================================
+# Edge Build: Auto-Detect Tags from Build Repos
+# ============================================
+# For edge builds (no pinned versions), TAG variables are empty in config.sh.
+# The build phase (setup.sh) already cloned repos and checked out latest tags.
+# Resolve empty tags by reading the checked-out tag from each component's
+# git repository in BUILD_ROOT.
+
+# Map component names to their build directory names
+# (most match 1:1 except these two)
+declare -A COMPONENT_BUILD_DIRS=(
+    ["container-configs"]="container-libs"
+)
+
+resolve_tag_from_repo() {
+    local component="$1"
+    local build_dir="${component}"
+    # Use override directory name if defined (e.g., container-configs -> container-libs)
+    if [[ -v "COMPONENT_BUILD_DIRS[$component]" ]]; then
+        build_dir="${COMPONENT_BUILD_DIRS[$component]}"
+    fi
+    local repo_path="${BUILD_ROOT}/${build_dir}"
+
+    if [[ ! -d "${repo_path}/.git" ]]; then
+        echo ""
+        return
+    fi
+
+    # Read the tag that HEAD points to (set by git_checkout during build)
+    local tag
+    tag=$(git -C "${repo_path}" describe --tags --exact-match HEAD 2>/dev/null) || true
+
+    if [[ -z "${tag}" ]]; then
+        # Fallback: get the most recent tag reachable from HEAD
+        tag=$(git -C "${repo_path}" describe --tags --abbrev=0 HEAD 2>/dev/null) || true
+    fi
+
+    echo "${tag}"
+}
+
+# ============================================
 # Prerequisite Validation
 # ============================================
 
@@ -157,10 +197,21 @@ for component in "${COMPONENTS[@]}"; do
         local_tag="$(date +"%Y%m%d")"
     fi
 
+    # Edge builds: auto-detect tag from build repo when not pinned
+    if [[ -z "${local_tag}" ]]; then
+        local_tag="$(resolve_tag_from_repo "${component}")"
+        if [[ -n "${local_tag}" ]]; then
+            echo ">>> Auto-detected tag for ${component}: ${local_tag}"
+            # Update the map so the suite meta-package can use it too
+            COMPONENT_TAGS["${component}"]="${local_tag}"
+        fi
+    fi
+
     # Validate tag is not empty
     if [[ -z "${local_tag}" ]]; then
         echo "ERROR: No version tag found for component: ${component}" >&2
-        echo "  Ensure the corresponding *_TAG variable is set in config.sh or environment." >&2
+        echo "  Ensure the corresponding *_TAG variable is set in config.sh or environment," >&2
+        echo "  or that the build repo exists at ${BUILD_ROOT}/ with a checked-out tag." >&2
         exit 1
     fi
 

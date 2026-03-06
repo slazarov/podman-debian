@@ -132,12 +132,17 @@ export GO_ROOT_FOLDER="/opt/go"
 #export GOPATH="/opt/go/${GOVERSION}/bin"
 #export GOROOT="/opt/go/${GOVERSION}"
 
-# Auto-detect latest Go version if not specified
+# Auto-detect Go version from Podman's go.mod (source of truth)
 if [[ -z "${GOVERSION:-}" ]]; then
-    export GOVERSION=$(get_latest_go_version)
+    export GOVERSION=$(get_required_go_version "${PODMAN_TAG:-}")
 fi
 export GOPATH="/opt/go/${GOVERSION}/bin"
 export GOROOT="/opt/go/${GOVERSION}"
+
+# Auto-detect Rust version from Netavark's Cargo.toml (source of truth)
+if [[ -z "${RUST_VERSION:-}" ]]; then
+    export RUST_VERSION=$(get_required_rust_version "${NETAVARK_TAG:-}")
+fi
 
 # Podman Version
 #export PODMAN_VERSION="5.5.2"

@@ -32,7 +32,7 @@ detect_architecture() {
 }
 
 # NOTE: config.sh is sourced at the END of this file (after all function definitions)
-# This is required because config.sh calls get_latest_protoc_version() and get_latest_go_version()
+# This is required because config.sh calls get_required_go_version(), get_required_rust_version(), etc.
 
 get_latest_tag() {
     # Input Parameters
@@ -72,6 +72,75 @@ get_latest_go_version() {
     latest_version=$(curl -s "https://go.dev/dl/?mode=json" | grep -m1 '"version"' | sed 's/.*"version": *"\([^"]*\)".*/\1/')
     # Strip go prefix if present (version is "go1.26.0", we want "1.26.0")
     echo "${latest_version#go}"
+}
+
+get_required_go_version() {
+    # Auto-detect Go version from Podman's go.mod (upstream source of truth)
+    # Parameter: optional git ref (tag like "v5.8.0" or empty for "main")
+    # Returns version WITHOUT go prefix (e.g., "1.24.2")
+    # Prefers "toolchain goX.Y.Z" (exact), falls back to "go X.Y.Z" (minimum)
+    local ref="${1:-main}"
+    [[ -z "$ref" ]] && ref="main"
+
+    local go_mod
+    go_mod=$(curl -sf "https://raw.githubusercontent.com/containers/podman/${ref}/go.mod" 2>/dev/null) || true
+
+    if [[ -n "$go_mod" ]]; then
+        # Prefer toolchain directive (exact version, e.g., "toolchain go1.24.2")
+        local toolchain_ver
+        toolchain_ver=$(echo "$go_mod" | grep -m1 '^toolchain ' | sed 's/^toolchain go//')
+
+        if [[ -n "$toolchain_ver" ]]; then
+            echo "  Auto-detected Go version from go.mod (toolchain): ${toolchain_ver}" >&2
+            echo "$toolchain_ver"
+            return
+        fi
+
+        # Fall back to go directive (minimum version, e.g., "go 1.24")
+        local go_ver
+        go_ver=$(echo "$go_mod" | grep -m1 '^go ' | sed 's/^go //')
+
+        if [[ -n "$go_ver" ]]; then
+            # go directive may be "1.24" (no patch) — append .0 if needed
+            if [[ "$go_ver" =~ ^[0-9]+\.[0-9]+$ ]]; then
+                go_ver="${go_ver}.0"
+            fi
+            echo "  Auto-detected Go version from go.mod (minimum): ${go_ver}" >&2
+            echo "$go_ver"
+            return
+        fi
+    fi
+
+    # Fallback: use latest Go version
+    echo "  WARNING: Could not fetch go.mod from containers/podman@${ref}, falling back to latest Go version" >&2
+    get_latest_go_version
+}
+
+get_required_rust_version() {
+    # Auto-detect Rust MSRV from Netavark's Cargo.toml (upstream source of truth)
+    # Parameter: optional git ref (tag like "v1.17.2" or empty for "main")
+    # Returns version like "1.86" or "stable"
+    local ref="${1:-main}"
+    [[ -z "$ref" ]] && ref="main"
+
+    local cargo_toml
+    cargo_toml=$(curl -sf "https://raw.githubusercontent.com/containers/netavark/${ref}/Cargo.toml" 2>/dev/null) || true
+
+    if [[ -n "$cargo_toml" ]]; then
+        # Parse rust-version = "X.Y" from [package] section
+        local rust_ver
+        rust_ver=$(echo "$cargo_toml" | grep -m1 '^rust-version' | sed 's/.*= *"\([^"]*\)".*/\1/')
+
+        if [[ -n "$rust_ver" ]]; then
+            echo "  Auto-detected Rust MSRV from Cargo.toml: ${rust_ver}" >&2
+            echo "$rust_ver"
+            return
+        fi
+    fi
+
+    # Fallback: use stable
+    echo "  WARNING: Could not fetch Cargo.toml from containers/netavark@${ref}, falling back to stable Rust" >&2
+    echo "stable"
 }
 
 git_clone_update() {
@@ -314,7 +383,7 @@ run_logged() {
 # ============================================
 # Load Configuration (MUST be after all function definitions)
 # ============================================
-# This sources config.sh which calls get_latest_protoc_version() and get_latest_go_version()
+# This sources config.sh which calls get_required_go_version(), get_required_rust_version(), etc.
 # Those functions must be defined BEFORE this line!
 
 source "${toolpath}/config.sh"

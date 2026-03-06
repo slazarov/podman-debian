@@ -20,7 +20,7 @@ trap 'error_handler $? $LINENO "$BASH_SOURCE"' ERR
 wget "https://static.rust-lang.org/rustup/dist/${RUSTUP_ARCH}/rustup-init" -O rustup-init
 chmod +x rustup-init
 
-./rustup-init -y
+./rustup-init -y --default-toolchain "${RUST_VERSION:-stable}"
 
 # Install sccache for Rust build caching (optional)
 if [[ "${SCCACHE_ENABLED:-false}" == "true" ]]; then

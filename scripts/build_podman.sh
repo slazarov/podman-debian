@@ -25,7 +25,6 @@ log_build_output "podman"
 # Fix for cloud-init where HOME is not set
 export HOME="${HOME:-/root}"
 
-# Required Fix otherwise go complains about 1.22.6 vs 1.23 mismatch
 export PATH="$GOPATH:$PATH"
 
 step_start "Cloning repository"
@@ -39,10 +38,6 @@ step_done
 
 step_start "Logging version"
 log_component "podman"
-step_done
-
-step_start "Applying pre-build fixes"
-sed -Ei "s|^go 1.22.6$|go 1.23|" go.mod
 step_done
 
 step_start "Configuring Go optimization"
