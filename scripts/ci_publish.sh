@@ -261,6 +261,9 @@ pre { padding: 1rem; overflow-x: auto; }
 .tab-content { display: none; border: 1px solid #ddd; border-top: none; border-radius: 0 0 6px 6px; padding: 1rem; }
 .tab-content.active { display: block; }
 a { color: #0366d6; }
+table { border-collapse: collapse; width: 100%; margin: 0.5rem 0 1.5rem; }
+th, td { text-align: left; padding: 0.4rem 0.8rem; border: 1px solid #ddd; font-size: 0.9em; }
+th { background: #f4f4f4; }
 </style>
 </head>
 <body>
@@ -321,9 +324,29 @@ HTMLEOF
 
 # Append suite info dynamically
 for s in "${available_suites[@]}"; do
+    # Parse unique packages with versions from amd64 Packages file (avoid duplicates across arches)
+    packages_file="${OUTPUT_DIR}/dists/${s}/main/binary-amd64/Packages"
     pkg_count=$(cat "${OUTPUT_DIR}/dists/${s}/main/binary-"*/Packages 2>/dev/null | grep -c "^Package:" || echo "0")
+
     cat >> "${OUTPUT_DIR}/index.html" << SUITEEOF
-<p><strong>${s}</strong> — ${pkg_count} packages | <a href="dists/${s}/InRelease">InRelease</a></p>
+<h3>${s} — ${pkg_count} packages <a href="dists/${s}/InRelease" style="font-size:0.8em;font-weight:normal">[InRelease]</a></h3>
+<table>
+<tr><th>Package</th><th>Version</th></tr>
+SUITEEOF
+
+    if [[ -f "${packages_file}" ]]; then
+        # Extract Package/Version pairs from Packages file
+        awk '/^Package:/{pkg=$2} /^Version:/{print pkg, $2}' "${packages_file}" \
+        | sort \
+        | while read -r pkg ver; do
+            cat >> "${OUTPUT_DIR}/index.html" << ROWEOF
+<tr><td>${pkg}</td><td><code>${ver}</code></td></tr>
+ROWEOF
+        done
+    fi
+
+    cat >> "${OUTPUT_DIR}/index.html" << SUITEEOF
+</table>
 SUITEEOF
 done
 
