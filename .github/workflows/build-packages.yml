@@ -1,15 +1,18 @@
 name: Build and Publish Packages
 
 on:
+  schedule:
+    - cron: '30 4 * * *'  # 4:30 AM UTC daily — nightly builds
   workflow_dispatch:
     inputs:
       build_track:
-        description: 'Build track (stable = pinned versions, edge = latest upstream)'
+        description: 'Build track (stable = pinned versions, edge = latest upstream tags, nightly = latest upstream commits)'
         required: true
         type: choice
         options:
           - stable
           - edge
+          - nightly
         default: stable
 
 permissions:
@@ -31,21 +34,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set version tags (stable)
-        if: inputs.build_track == 'stable'
+      - name: Resolve build track
+        id: track
         run: |
-          # Source pinned versions into GITHUB_ENV for all subsequent steps
-          while IFS= read -r line; do
-            # Skip comments and empty lines
-            [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
-            # Strip 'export ' prefix and surrounding quotes from values
-            line="${line#export }"
-            key="${line%%=*}"
-            val="${line#*=}"
-            val="${val%\"}"
-            val="${val#\"}"
-            echo "${key}=${val}" >> "$GITHUB_ENV"
-          done < versions-stable.env
+          TRACK="${{ inputs.build_track || 'nightly' }}"
+          echo "track=${TRACK}" >> "$GITHUB_OUTPUT"
+          echo "Build track: ${TRACK}"
 
       - name: Cache Go modules and build cache
         uses: actions/cache@v4
@@ -53,8 +47,9 @@ jobs:
           path: |
             ~/.cache/go-mod
             ~/.cache/go-build
-          key: go-${{ runner.arch }}-${{ hashFiles('versions-stable.env') }}
+          key: go-${{ runner.arch }}-${{ steps.track.outputs.track }}-${{ github.run_number }}
           restore-keys: |
+            go-${{ runner.arch }}-${{ steps.track.outputs.track }}-
             go-${{ runner.arch }}-
 
       - name: Update apt cache
@@ -70,7 +65,7 @@ jobs:
           # Point Go caches to runner-accessible paths for actions/cache compatibility
           ENV_ARGS="DEBIAN_FRONTEND=noninteractive DESTDIR=$DESTDIR"
           ENV_ARGS="$ENV_ARGS GOCACHE=$HOME/.cache/go-build GOMODCACHE=$HOME/.cache/go-mod"
-          if [[ "${{ inputs.build_track }}" == "stable" ]]; then
+          if [[ "${{ steps.track.outputs.track }}" == "stable" ]]; then
             while IFS= read -r line; do
               [[ "$line" =~ ^[[:space:]]*# || -z "$line" ]] && continue
               line="${line#export }"
@@ -80,6 +75,8 @@ jobs:
               val="${val#\"}"
               ENV_ARGS="$ENV_ARGS ${key}=${val}"
             done < versions-stable.env
+          elif [[ "${{ steps.track.outputs.track }}" == "nightly" ]]; then
+            ENV_ARGS="$ENV_ARGS NIGHTLY_BUILD=true SHALLOW_CLONE=false"
           fi
           sudo env $ENV_ARGS ./setup.sh
           # Fix ownership so actions/cache can save the Go caches
@@ -112,6 +109,9 @@ jobs:
         run: |
           export PATH="/opt/go/$(ls /opt/go/)/bin:$HOME/go/bin:$PATH"
           export DESTDIR="${{ runner.temp }}/podman-staging"
+          if [[ "${{ steps.track.outputs.track }}" == "nightly" ]]; then
+            export NIGHTLY_BUILD=true
+          fi
           ./scripts/package_all.sh
 
       - uses: actions/upload-artifact@v4
@@ -129,18 +129,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set version tags (stable)
-        if: inputs.build_track == 'stable'
+      - name: Resolve build track
+        id: track
         run: |
-          while IFS= read -r line; do
-            [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
-            line="${line#export }"
-            key="${line%%=*}"
-            val="${line#*=}"
-            val="${val%\"}"
-            val="${val#\"}"
-            echo "${key}=${val}" >> "$GITHUB_ENV"
-          done < versions-stable.env
+          TRACK="${{ inputs.build_track || 'nightly' }}"
+          echo "track=${TRACK}" >> "$GITHUB_OUTPUT"
+          echo "Build track: ${TRACK}"
 
       - name: Cache Go modules and build cache
         uses: actions/cache@v4
@@ -148,8 +142,9 @@ jobs:
           path: |
             ~/.cache/go-mod
             ~/.cache/go-build
-          key: go-${{ runner.arch }}-${{ hashFiles('versions-stable.env') }}
+          key: go-${{ runner.arch }}-${{ steps.track.outputs.track }}-${{ github.run_number }}
           restore-keys: |
+            go-${{ runner.arch }}-${{ steps.track.outputs.track }}-
             go-${{ runner.arch }}-
 
       - name: Update apt cache
@@ -162,7 +157,7 @@ jobs:
           mkdir -p "$HOME/.cache/go-build" "$HOME/.cache/go-mod"
           ENV_ARGS="DEBIAN_FRONTEND=noninteractive DESTDIR=$DESTDIR"
           ENV_ARGS="$ENV_ARGS GOCACHE=$HOME/.cache/go-build GOMODCACHE=$HOME/.cache/go-mod"
-          if [[ "${{ inputs.build_track }}" == "stable" ]]; then
+          if [[ "${{ steps.track.outputs.track }}" == "stable" ]]; then
             while IFS= read -r line; do
               [[ "$line" =~ ^[[:space:]]*# || -z "$line" ]] && continue
               line="${line#export }"
@@ -172,6 +167,8 @@ jobs:
               val="${val#\"}"
               ENV_ARGS="$ENV_ARGS ${key}=${val}"
             done < versions-stable.env
+          elif [[ "${{ steps.track.outputs.track }}" == "nightly" ]]; then
+            ENV_ARGS="$ENV_ARGS NIGHTLY_BUILD=true SHALLOW_CLONE=false"
           fi
           sudo env $ENV_ARGS ./setup.sh
           sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/go-build" "$HOME/.cache/go-mod"
@@ -186,6 +183,9 @@ jobs:
         run: |
           export PATH="/opt/go/$(ls /opt/go/)/bin:$HOME/go/bin:$PATH"
           export DESTDIR="${{ runner.temp }}/podman-staging"
+          if [[ "${{ steps.track.outputs.track }}" == "nightly" ]]; then
+            export NIGHTLY_BUILD=true
+          fi
           ./scripts/package_all.sh
 
       - uses: actions/upload-artifact@v4
@@ -206,6 +206,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve build track
+        id: track
+        run: |
+          TRACK="${{ inputs.build_track || 'nightly' }}"
+          echo "track=${TRACK}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/download-artifact@v4
         with:
           pattern: debs-*
@@ -222,7 +228,7 @@ jobs:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
         run: |
           ./scripts/ci_publish.sh \
-            "${{ inputs.build_track }}" \
+            "${{ steps.track.outputs.track }}" \
             "all-debs" \
             "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}" \
             "repo-output"
