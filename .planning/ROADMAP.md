@@ -40,7 +40,7 @@
 
 </details>
 
-### 🚧 v2.0 APT Packaging & CI/CD (In Progress)
+### v2.0 APT Packaging & CI/CD (In Progress)
 
 **Milestone Goal:** Package all compiled Podman components as .deb packages, automate builds with GitHub Actions, and distribute via a GitHub Pages APT repository.
 
@@ -134,6 +134,23 @@ Phases execute in numeric order: 14 -> 15 -> 16 -> 17
 | 15. APT Repository and Signing | v2.0 | 2/2 | Complete | 2026-03-05 |
 | 16. CI/CD Pipeline | 1/2 | In Progress|  | - |
 | 17. Upstream Automation | v2.0 | 0/? | Not started | - |
+
+### Phase 18: Edge Track: Build from Latest Upstream Commits
+
+**Goal:** Users can install bleeding-edge packages built from the latest upstream commits via a nightly APT suite, with correct Debian snapshot versioning that auto-upgrades to tagged releases
+**Requirements**: EDGE-01, EDGE-02, EDGE-03, EDGE-04, EDGE-05
+**Depends on:** Phase 17
+**Success Criteria** (what must be TRUE):
+  1. Nightly version strings (e.g., 6.0.0~git20260306.abc1234~podman1) sort below tagged releases via dpkg, so users auto-upgrade when a real release lands
+  2. Dev versions are correctly extracted from each upstream component's source files (version.go, Cargo.toml, configure.ac, VERSION, meson.build)
+  3. Nightly .deb packages are valid and installable via dpkg -i
+  4. reprepro accepts nightly packages into a dedicated nightly suite alongside stable and edge
+  5. A daily cron workflow triggers nightly builds automatically, and the nightly track is also available via manual dispatch
+**Plans**: 2 plans
+
+Plans:
+- [ ] 18-01-PLAN.md — Nightly env config, nightly-aware git_checkout, reprepro nightly suite, and dev version extraction in package_all.sh
+- [ ] 18-02-PLAN.md — Three-suite CI publish script and GitHub Actions workflow with nightly option and cron trigger
 
 ---
 

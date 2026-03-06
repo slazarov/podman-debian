@@ -181,7 +181,16 @@ git_checkout() {
     # Input Parameters
     local ltag=${1-""}
 
-    if [[ -n "${ltag}" ]]
+    if [[ "${NIGHTLY_BUILD:-false}" == "true" && -z "${ltag}" ]]; then
+       # Nightly mode: stay on default branch HEAD (no tag checkout)
+       # This builds from the latest upstream commits for bleeding-edge packages
+       local default_branch
+       default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@') || true
+       default_branch="${default_branch:-main}"
+       git checkout "${default_branch}"
+       git pull origin "${default_branch}" || true
+       export GIT_CHECKED_OUT_TAG="nightly"
+    elif [[ -n "${ltag}" ]]
     then
        # For shallow clones, the tag may not be available locally - fetch it
        if ! git rev-parse "${ltag}" &>/dev/null; then
