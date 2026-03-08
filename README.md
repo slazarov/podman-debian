@@ -8,7 +8,7 @@ Compile and install the latest Podman stack from source on Debian/Ubuntu, or ins
 | **Platform** | Ubuntu 24.04 (Noble Numbat) |
 | **Architectures** | amd64 (x86_64), arm64 (aarch64) |
 
-Forked from [luckylinux/podman-ubuntu](https://github.com/luckylinux/podman-ubuntu) with significant additions: arm64 support, fully non-interactive builds, hosted APT repository, CI/CD pipelines, 12 packaged components, build caching, and three release tracks (stable, edge, nightly).
+Forked from [luckylinux/podman-debian](https://github.com/luckylinux/podman-debian) with significant additions: arm64 support, fully non-interactive builds, hosted APT repository, CI/CD pipelines, 12 packaged components, build caching, and three release tracks (stable, edge, nightly).
 
 ---
 
@@ -217,5 +217,5 @@ The build system supports opt-in caching layers for faster rebuilds:
 
 ## Credits
 
-- Forked from [luckylinux/podman-ubuntu](https://github.com/luckylinux/podman-ubuntu)
+- Forked from [luckylinux/podman-debian](https://github.com/luckylinux/podman-debian)
 - Upstream: [Podman](https://github.com/containers/podman) by the Containers project
