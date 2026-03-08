@@ -14,16 +14,16 @@ Add the repository and install the full Podman stack in 4 commands:
 ```bash
 # Download the GPG signing key
 sudo mkdir -p /etc/apt/keyrings
-sudo wget -qO /etc/apt/keyrings/podman-debian.gpg \
-  https://slazarov.github.io/podman-debian/podman-debian.gpg
+sudo wget -qO /etc/apt/keyrings/podman-ubuntu.gpg \
+  https://slazarov.github.io/podman-ubuntu/podman-ubuntu.gpg
 
 # Add the repository (DEB822 format)
-sudo tee /etc/apt/sources.list.d/podman-debian.sources << 'EOF'
+sudo tee /etc/apt/sources.list.d/podman-ubuntu.sources << 'EOF'
 Types: deb
-URIs: https://slazarov.github.io/podman-debian
+URIs: https://slazarov.github.io/podman-ubuntu
 Suites: stable
 Components: main
-Signed-By: /etc/apt/keyrings/podman-debian.gpg
+Signed-By: /etc/apt/keyrings/podman-ubuntu.gpg
 EOF
 
 # Update and install
@@ -38,12 +38,12 @@ The `podman-suite` meta-package installs all components. See below for installin
 The edge suite tracks the latest upstream release tags. To use edge instead of stable, change the `Suites` line in the DEB822 source file:
 
 ```bash
-sudo tee /etc/apt/sources.list.d/podman-debian.sources << 'EOF'
+sudo tee /etc/apt/sources.list.d/podman-ubuntu.sources << 'EOF'
 Types: deb
-URIs: https://slazarov.github.io/podman-debian
+URIs: https://slazarov.github.io/podman-ubuntu
 Suites: edge
 Components: main
-Signed-By: /etc/apt/keyrings/podman-debian.gpg
+Signed-By: /etc/apt/keyrings/podman-ubuntu.gpg
 EOF
 
 sudo apt update
@@ -92,37 +92,37 @@ Both architectures are built natively (not cross-compiled) and included in the s
 Verify the key was downloaded correctly:
 
 ```bash
-file /etc/apt/keyrings/podman-debian.gpg
+file /etc/apt/keyrings/podman-ubuntu.gpg
 ```
 
 Expected output should show "PGP/GPG key public ring" or similar binary key format. If it shows HTML or text, the download URL may have changed. Re-download:
 
 ```bash
-sudo wget -qO /etc/apt/keyrings/podman-debian.gpg \
-  https://slazarov.github.io/podman-debian/podman-debian.gpg
+sudo wget -qO /etc/apt/keyrings/podman-ubuntu.gpg \
+  https://slazarov.github.io/podman-ubuntu/podman-ubuntu.gpg
 ```
 
 ### Signature verification errors on apt update
 
 If you see errors like `The following signatures couldn't be verified` or `NO_PUBKEY`:
 
-1. Ensure the key file is binary format (not ASCII-armored). Check with `file /etc/apt/keyrings/podman-debian.gpg` -- it should not start with `-----BEGIN`.
+1. Ensure the key file is binary format (not ASCII-armored). Check with `file /etc/apt/keyrings/podman-ubuntu.gpg` -- it should not start with `-----BEGIN`.
 
 2. If you have an ASCII-armored key (.asc file), convert it:
 
 ```bash
-sudo gpg --dearmor -o /etc/apt/keyrings/podman-debian.gpg /etc/apt/keyrings/podman-debian.asc
+sudo gpg --dearmor -o /etc/apt/keyrings/podman-ubuntu.gpg /etc/apt/keyrings/podman-ubuntu.asc
 ```
 
 3. Verify the `Signed-By` path in your sources file matches the key location:
 
 ```bash
-cat /etc/apt/sources.list.d/podman-debian.sources
+cat /etc/apt/sources.list.d/podman-ubuntu.sources
 ```
 
 ### Repository returns 404
 
-The repository URL is `https://slazarov.github.io/podman-debian`. Ensure:
+The repository URL is `https://slazarov.github.io/podman-ubuntu`. Ensure:
 
 - The `URIs` line in your sources file has no trailing slash
 - GitHub Pages is live (check the URL in a browser)
@@ -130,9 +130,9 @@ The repository URL is `https://slazarov.github.io/podman-debian`. Ensure:
 
 ### Packages conflict with official Ubuntu packages
 
-The podman-debian packages use `Conflicts`, `Replaces`, and `Provides` declarations to handle coexistence with official Ubuntu packages. Installing a `podman-*` package will replace the corresponding official package if present. This is by design -- the compiled-from-source versions are newer.
+The podman-ubuntu packages use `Conflicts`, `Replaces`, and `Provides` declarations to handle coexistence with official Ubuntu packages. Installing a `podman-*` package will replace the corresponding official package if present. This is by design -- the compiled-from-source versions are newer.
 
-To revert to official packages, remove the podman-debian packages and reinstall from the official repository:
+To revert to official packages, remove the podman-ubuntu packages and reinstall from the official repository:
 
 ```bash
 sudo apt remove podman-suite

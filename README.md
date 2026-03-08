@@ -1,4 +1,4 @@
-# podman-debian
+# podman-ubuntu
 
 Compile and install the latest Podman stack from source on Debian/Ubuntu, or install pre-built packages from the hosted APT repository.
 
@@ -8,7 +8,7 @@ Compile and install the latest Podman stack from source on Debian/Ubuntu, or ins
 | **Platform** | Ubuntu 24.04 (Noble Numbat) |
 | **Architectures** | amd64 (x86_64), arm64 (aarch64) |
 
-Forked from [luckylinux/podman-debian](https://github.com/luckylinux/podman-debian) with significant additions: arm64 support, fully non-interactive builds, hosted APT repository, CI/CD pipelines, 12 packaged components, build caching, and three release tracks (stable, edge, nightly).
+Forked from [luckylinux/podman-ubuntu](https://github.com/luckylinux/podman-ubuntu) with significant additions: arm64 support, fully non-interactive builds, hosted APT repository, CI/CD pipelines, 12 packaged components, build caching, and three release tracks (stable, edge, nightly).
 
 ---
 
@@ -19,16 +19,16 @@ Add the repository and install the full Podman stack in 4 commands:
 ```bash
 # Download the GPG signing key
 sudo mkdir -p /etc/apt/keyrings
-sudo wget -qO /etc/apt/keyrings/podman-debian.gpg \
-  https://slazarov.github.io/podman-debian/podman-debian.gpg
+sudo wget -qO /etc/apt/keyrings/podman-ubuntu.gpg \
+  https://slazarov.github.io/podman-ubuntu/podman-ubuntu.gpg
 
 # Add the repository (DEB822 format)
-sudo tee /etc/apt/sources.list.d/podman-debian.sources << 'EOF'
+sudo tee /etc/apt/sources.list.d/podman-ubuntu.sources << 'EOF'
 Types: deb
-URIs: https://slazarov.github.io/podman-debian
+URIs: https://slazarov.github.io/podman-ubuntu
 Suites: stable
 Components: main
-Signed-By: /etc/apt/keyrings/podman-debian.gpg
+Signed-By: /etc/apt/keyrings/podman-ubuntu.gpg
 EOF
 
 # Update and install
@@ -56,7 +56,7 @@ To switch from one suite to another, change the `Suites:` line in your sources f
 
 ```bash
 # Example: switch from stable to edge
-sudo sed -i 's/^Suites: .*/Suites: edge/' /etc/apt/sources.list.d/podman-debian.sources
+sudo sed -i 's/^Suites: .*/Suites: edge/' /etc/apt/sources.list.d/podman-ubuntu.sources
 sudo apt update
 sudo apt upgrade
 ```
@@ -105,8 +105,8 @@ For users who prefer to compile everything locally rather than using the APT rep
 ### Build Steps
 
 ```bash
-git clone https://github.com/slazarov/podman-debian.git
-cd podman-debian
+git clone https://github.com/slazarov/podman-ubuntu.git
+cd podman-ubuntu
 
 # Source version pins (stable track)
 source versions-stable.env
@@ -217,5 +217,5 @@ The build system supports opt-in caching layers for faster rebuilds:
 
 ## Credits
 
-- Forked from [luckylinux/podman-debian](https://github.com/luckylinux/podman-debian)
+- Forked from [luckylinux/podman-ubuntu](https://github.com/luckylinux/podman-ubuntu)
 - Upstream: [Podman](https://github.com/containers/podman) by the Containers project

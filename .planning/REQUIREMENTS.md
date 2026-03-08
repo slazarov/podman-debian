@@ -1,4 +1,4 @@
-# Requirements: Podman Debian Compiler
+# Requirements: Podman Ubuntu Compiler
 
 **Defined:** 2026-03-04
 **Core Value:** Compile and install Podman on any Debian/Ubuntu system without user interaction.
