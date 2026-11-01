@@ -635,10 +635,13 @@ script_start() {
     export _SCRIPT_START=$(date +%s)
 }
 
+# script_done <name> [start-epoch] -- print the elapsed time since start-epoch,
+# or since script_start when no start time is given.
 script_done() {
     local script_name="$1"
+    local start="${2:-${_SCRIPT_START}}"
     local end=$(date +%s)
-    local elapsed=$((end - _SCRIPT_START))
+    local elapsed=$((end - start))
     echo ">>> Completed: ${script_name} in $(format_duration $elapsed)"
 }
 
