@@ -72,6 +72,7 @@ source versions-nightly.env && sudo -E ./setup.sh                               
 | `TOOLBOX_TAG` | `0.3` | Toolbx release tag. |
 | `FUSE_OVERLAYFS_TAG` | `v1.16` | fuse-overlayfs release tag. |
 | `CATATONIT_TAG` | `v0.2.1` | catatonit release tag. |
+| `PASTA_TAG` | `2026_10_02.cba3570` | passt release tag (`YYYY_MM_DD.<sha>`). The package version is the date, `20261002`. Empty builds upstream `master`, versioned by the build date; nightly always does this. |
 | `CONTAINER_LIBS_TAG` | `common/v0.67.0` | containers/container-libs tag for the config files and `seccomp.json`. Uses namespaced `common/` tags. |
 | `PROTOC_VERSION` | `34.0` | protoc version. Defaults to the latest release (`get_latest_protoc_version`). |
 | `PROTOC_TAG` | `v34.0` | protoc tag. Defaults to `v${PROTOC_VERSION}`. |

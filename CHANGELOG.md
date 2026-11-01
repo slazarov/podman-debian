@@ -10,6 +10,7 @@ Notable changes to this project are recorded here, in the format of [Keep a Chan
 - `podman-*` packages built with nFPM. They declare `Conflicts`, `Replaces` and `Provides` against Debian's own packages, and their library dependencies are detected from the built binaries.
 - Signed APT repository on GitHub Pages, built with reprepro, with `Acquire-By-Hash` indexes and six suites: `{stable,v5,nightly}-{bookworm,trixie}`.
 - Three tracks: stable (Podman 6.x) and v5 (Podman 5.x), whose tags are chosen by `scripts/resolve_versions.sh` from a policy file with series caps and a soak period, and nightly (upstream HEAD).
+- On stable and v5, pasta is built from the newest soaked passt release and versioned by its release date (`20261002`). Nightly builds passt `master`.
 - Version suffix `~deb12.podmanN` / `~deb13.podmanN`, with orderings checked by `scripts/verify_versions.sh`. Nightly versions use a `~~git` marker so they sort below the tagged release.
 - Distro table in `config.sh` as the single list of supported releases. The CI matrix, smoke tests, republish check and repository page read it.
 - Distro detection that accepts the codename or the VERSION_ID and rejects other distributions, Debian testing and unstable, and architectures other than amd64.

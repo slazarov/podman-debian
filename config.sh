@@ -285,6 +285,9 @@ export GOMD2MAN_TAG="${GOMD2MAN_TAG:-}"
 #export TOOLBOX_TAG="${TOOLBOX_VERSION}"
 export TOOLBOX_TAG="${TOOLBOX_TAG:-}"
 
+# Pasta (passt release tag, YYYY_MM_DD.<sha>). Empty builds upstream HEAD.
+export PASTA_TAG="${PASTA_TAG:-}"
+
 # Fuse-OverlayFS Version
 export FUSE_OVERLAYFS_TAG="${FUSE_OVERLAYFS_TAG:-}"
 

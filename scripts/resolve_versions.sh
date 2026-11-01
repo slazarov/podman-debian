@@ -44,8 +44,10 @@ source "${toolpath}/functions.sh"
 # Component table: name | *_TAG var | *_SERIES var | upstream repo URL.
 # Emit order = this order. container-configs is the only namespaced component (its
 # tags are common/vX.Y.Z and its tag var is CONTAINER_LIBS_TAG -- the documented
-# triple naming mismatch). pasta (date-versioned HEAD) and sccache/protoc (build
-# tools, pinned exactly in the policy file) are intentionally ABSENT.
+# triple naming mismatch). pasta's tags are passt release dates (YYYY_MM_DD.<sha>);
+# they have no series, so pasta always floats to the newest soaked release.
+# sccache/protoc (build tools, pinned exactly in the policy file) are
+# intentionally ABSENT.
 # go-md2man is ALSO intentionally ABSENT: it is build-only man-page tooling with no
 # packaging/nfpm/*md2man* package and no entry in check_republish_needed.sh's compare
 # set, so resolving it here would let an unreachable cpuguy83/go-md2man remote HOLD
@@ -66,6 +68,7 @@ COMPONENT_ROWS=(
     "fuse-overlayfs|FUSE_OVERLAYFS_TAG|FUSE_OVERLAYFS_SERIES|https://github.com/containers/fuse-overlayfs.git"
     "catatonit|CATATONIT_TAG|CATATONIT_SERIES|https://github.com/openSUSE/catatonit.git"
     "container-configs|CONTAINER_LIBS_TAG|CONTAINER_LIBS_SERIES|https://github.com/containers/container-libs.git"
+    "pasta|PASTA_TAG|PASTA_SERIES|git://passt.top/passt"
 )
 
 # _resolver_now_epoch -- "now" in Unix seconds, overridable for tests.

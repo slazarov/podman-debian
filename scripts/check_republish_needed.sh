@@ -20,25 +20,27 @@ set -euo pipefail
 # Usage:  check_republish_needed.sh <stable|v5> [repo-url]
 # Output: writes `skip=<bool>` to stdout and to $GITHUB_OUTPUT when set.
 #
-# Scope / deliberate exclusions:
-#   * `pasta` is NOT compared. build_pasta.sh versions it by `date +%Y%m%d`
-#     (it has no upstream tag pin on any track), so it changes every day. A
-#     stable/v5 rebuild therefore always yields a fresh pasta even when every
-#     pinned component is unchanged. Comparing it would make this guard never
-#     fire. pasta still rides along on whatever build a real component change
-#     triggers, and the nightly track refreshes it daily.
+# Scope:
 #   * `nightly` is out of scope: the workflow's `check-changes` job already
 #     guards the scheduled nightly run via upstream HEAD SHAs.
 #
 # Canonical version-string logic lives in scripts/package_all.sh
 # (extract_version, VERSION_SUFFIX). The minimal subset needed here is
-# reproduced below and pinned by tests/test_check_republish.sh — keep the two
-# in sync if package_all.sh's transformation changes.
+# reproduced below and pinned by tests/test_check_republish.sh; keep the two
+# in sync if package_all.sh's transformation changes. The pasta conversion is
+# shared: both call pasta_version_from_tag from functions.sh.
 # ============================================================================
 
 REPO_URL_DEFAULT="${REPO_URL_DEFAULT:-https://slazarov.github.io/podman-debian}"
 
 _check_republish_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# pasta_version_from_tag, shared with package_all.sh. SKIP_CONFIG_SOURCE keeps
+# functions.sh from loading config.sh (host distro detection).
+toolpath="$(cd "${_check_republish_dir}/.." && pwd)"
+export SKIP_CONFIG_SOURCE=1
+# shellcheck source=functions.sh
+source "${toolpath}/functions.sh"
 
 # PACKAGE_REVISION (the N in ~debNN.podmanN), shared with config.sh.
 # shellcheck source=scripts/package_revision.sh
@@ -49,8 +51,8 @@ source "${_check_republish_dir}/package_revision.sh"
 eval "$(sed -n '/^VALID_TRACKS=/,/^unset _distro _track$/p' "${_check_republish_dir}/../config.sh")"
 
 # component | deb package name | resolved *_TAG var | upstream repo (provenance)
-# pasta is intentionally absent (see header). container-configs uses the
-# namespaced container-libs repo whose tags look like `common/vX.Y.Z`.
+# container-configs uses the namespaced container-libs repo whose tags look
+# like `common/vX.Y.Z`; pasta's are passt release dates (`YYYY_MM_DD.<sha>`).
 COMPONENT_ROWS=(
     "podman|podman-podman|PODMAN_TAG|https://github.com/containers/podman.git"
     "crun|podman-crun|CRUN_TAG|https://github.com/containers/crun.git"
@@ -63,6 +65,7 @@ COMPONENT_ROWS=(
     "skopeo|podman-skopeo|SKOPEO_TAG|https://github.com/containers/skopeo.git"
     "toolbox|podman-toolbx|TOOLBOX_TAG|https://github.com/containers/toolbox.git"
     "container-configs|podman-container-configs|CONTAINER_LIBS_TAG|https://github.com/containers/container-libs.git"
+    "pasta|podman-pasta|PASTA_TAG|git://passt.top/passt"
 )
 
 
@@ -79,6 +82,10 @@ extract_base() {
         container-configs)
             # namespaced tag: common/v0.67.1 -> 0.67.1
             echo "${ltag}" | sed 's|^.*/v||'
+            ;;
+        pasta)
+            # passt release tag: 2026_10_02.cba3570 -> 20261002
+            pasta_version_from_tag "${ltag}"
             ;;
         *)
             # standard: strip a leading v (v5.8.2 -> 5.8.2; 1.28 -> 1.28)
@@ -172,7 +179,7 @@ main() {
         done
     done
 
-    # Compare every tagged component (pasta excluded) across all indices.
+    # Compare every component across all indices.
     local row comp pkg tagvar tag base target published
     for row in "${COMPONENT_ROWS[@]}"; do
         # The 4th column (upstream repo URL) documents provenance but is no longer
@@ -202,7 +209,7 @@ main() {
         echo ">>> ${pkg}: ${base} already published on every distro." >&2
     done
 
-    emit_skip true "All ${#COMPONENT_ROWS[@]} tagged components already published at target versions (pasta excluded)."
+    emit_skip true "All ${#COMPONENT_ROWS[@]} components already published at target versions."
 }
 
 # Only run when executed directly, so tests can source the helpers.

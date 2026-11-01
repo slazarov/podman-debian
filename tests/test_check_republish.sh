@@ -43,6 +43,7 @@ assert_equals "numeric-only tag unchanged (crun)"  "1.28"   "$(extract_base '1.2
 assert_equals "numeric-only tag unchanged (toolbox)" "0.3"  "$(extract_base '0.3' 'toolbox')"
 assert_equals "namespaced container-libs tag"      "0.67.1" "$(extract_base 'common/v0.67.1' 'container-configs')"
 assert_equals "catatonit v-prefixed"               "0.2.1"  "$(extract_base 'v0.2.1' 'catatonit')"
+assert_equals "pasta release tag -> date"          "20261002" "$(extract_base '2026_10_02.cba3570' 'pasta')"
 
 echo "=== get_pkg_version ==="
 TEST_TMPDIR="$(mktemp -d)"

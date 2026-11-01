@@ -275,6 +275,10 @@ _rank_upstream_tags() {
     if [[ "${lcomponent}" == "container-configs" ]]; then
         lfilter='^common/v[0-9]'
         lstrip='common/v'
+    elif [[ "${lcomponent}" == "pasta" ]]; then
+        # passt release tags are YYYY_MM_DD.<sha>; version-sort orders them by date.
+        lfilter='^[0-9]{4}_[0-9]{2}_[0-9]{2}\.'
+        lstrip=''
     else
         lfilter='^v?[0-9]'
         lstrip='v'
@@ -297,6 +301,21 @@ _rank_upstream_tags() {
         fi
         printf '%s %s\n' "${lsv}" "${lt}"
     done | sort --reverse --version-sort -k1 | awk '{print $2}'
+}
+
+# pasta_version_from_tag <tag> -- print the package version for a passt release
+# tag. passt tags its releases YYYY_MM_DD.<sha> (2026_10_02.cba3570); the package
+# version is the date alone (20261002). An 8-digit date is passed through.
+pasta_version_from_tag() {
+    local ltag="$1"
+    if [[ "${ltag}" =~ ^([0-9]{4})_([0-9]{2})_([0-9]{2})(\..+)?$ ]]; then
+        printf '%s%s%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}"
+    elif [[ "${ltag}" =~ ^[0-9]{8}$ ]]; then
+        printf '%s\n' "${ltag}"
+    else
+        echo "ERROR: not a passt release tag: '${ltag}' (want YYYY_MM_DD.<sha>)" >&2
+        return 1
+    fi
 }
 
 get_latest_tag() {
