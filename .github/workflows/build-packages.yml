@@ -339,6 +339,17 @@ jobs:
           fi
           ./scripts/package_all.sh
 
+      # Checks the library packages detected from the built binaries against
+      # this release's known set (bookworm and trixie name several of them
+      # differently), and that every nFPM file renders and parses. A wrong or
+      # new library name fails here, before anything is uploaded.
+      - name: Verify detected dependencies
+        run: |
+          export DISTRO="${{ matrix.distro }}"
+          export PATH="/opt/go/$(ls /opt/go/)/bin:$HOME/go/bin:$PATH"
+          export DESTDIR="${{ runner.temp }}/podman-staging"
+          ./scripts/verify_depends.sh
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           # One artifact per distro: debs-bookworm, debs-trixie.
