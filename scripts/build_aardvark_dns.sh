@@ -53,10 +53,7 @@ step_start "Configuring Cargo optimization"
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$NPROC}"
 
 # Enable sccache for Rust build caching when configured
-if [[ "${SCCACHE_ENABLED:-false}" == "true" ]] && command -v sccache &>/dev/null; then
-    export RUSTC_WRAPPER=sccache
-    echo "  sccache enabled for Rust compilation"
-fi
+enable_rust_compiler_cache
 
 # Enable mold linker for faster Rust linking when configured
 if [[ "${MOLD_ENABLED:-false}" == "true" ]] && command -v mold &>/dev/null; then

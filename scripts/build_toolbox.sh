@@ -42,7 +42,12 @@ run_logged meson setup --prefix /usr --buildtype=plain builddir
 step_done
 
 step_start "Building"
-run_logged meson compile -C builddir
+# The build runs `toolbox completion` to generate the shell completions.
+# Inside a podman container (/run/.containerenv exists), toolbox assumes it is
+# in a toolbox container and refuses to run unless TOOLBOX_PATH is set. Docker
+# containers and bare hosts are unaffected. The value is only checked for
+# presence during completion generation.
+TOOLBOX_PATH="${TOOLBOX_PATH:-/usr/bin/toolbox}" run_logged meson compile -C builddir
 step_done
 
 step_start "Testing"

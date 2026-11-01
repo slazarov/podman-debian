@@ -26,7 +26,26 @@ chmod +x rustup-init
 if [[ "${SCCACHE_ENABLED:-false}" == "true" ]]; then
     step_start "Installing sccache v${SCCACHE_VERSION}"
 
-    wget "https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/sccache-v${SCCACHE_VERSION}-${SCCACHE_ARCH}.tar.gz" -O sccache.tar.gz
+    sccache_url="https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/sccache-v${SCCACHE_VERSION}-${SCCACHE_ARCH}.tar.gz"
+    wget "${sccache_url}" -O sccache.tar.gz
+
+    # Check the tarball before unpacking it: against SCCACHE_SHA256 when set
+    # (pinned in config.sh for the default version), else against the
+    # .sha256 file upstream publishes next to the tarball.
+    sccache_expected="${SCCACHE_SHA256:-}"
+    if [[ -z "${sccache_expected}" ]]; then
+        wget "${sccache_url}.sha256" -O sccache.tar.gz.sha256
+        sccache_expected="$(awk '{print $1; exit}' sccache.tar.gz.sha256)"
+        rm -f sccache.tar.gz.sha256
+    fi
+    sccache_actual="$(sha256sum sccache.tar.gz | awk '{print $1}')"
+    if [[ ! "${sccache_expected}" =~ ^[0-9a-f]{64}$ || "${sccache_actual}" != "${sccache_expected}" ]]; then
+        echo "ERROR: sccache download checksum mismatch (expected '${sccache_expected}', got '${sccache_actual}')" >&2
+        rm -f sccache.tar.gz
+        exit 1
+    fi
+    echo "  sccache tarball checksum OK (${sccache_actual})"
+
     tar -xzf sccache.tar.gz
     cp "sccache-v${SCCACHE_VERSION}-${SCCACHE_ARCH}/sccache" /usr/local/bin/sccache
     chmod +x /usr/local/bin/sccache

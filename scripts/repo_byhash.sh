@@ -31,6 +31,16 @@ trap 'error_handler $? $LINENO "$BASH_SOURCE"' ERR
 #
 # This helper does NOT re-import the GPG key; it relies on repo_manage.sh having
 # already imported it into the keyring earlier in the publish.
+#
+# Every step checks its own result and the function returns 1 on the first
+# failure, after it has printed the reason. It does not change the caller's
+# shell options and installs no traps, so it behaves the same inside an `if`
+# or `||` (where bash turns errexit off) as on its own. Callers must stop on
+# a non-zero return: a suite whose Release was edited but not re-signed is
+# unusable for apt.
+#
+# A listed index that does not exist on disk is skipped here (there is
+# nothing to copy). verify_repo_integrity.sh fails the publish on it later.
 
 # add_byhash_and_resign <suite> <output-dir>
 #   lsuite : suite name (e.g. "stable-bookworm")
@@ -39,68 +49,87 @@ add_byhash_and_resign() {
     local lsuite="$1" lrepo="$2"          # lrepo = OUTPUT_DIR
     local ldist="${lrepo}/dists/${lsuite}"
     local lrelease="${ldist}/Release"
+    local algo hash relpath src bhdir cmd rh lentries
 
-    # Pipefail isolation: this helper is sourced under the caller's
-    # `set -euo pipefail` (ci_publish.sh). A benign non-zero pipe head
-    # inside the by-hash loops (a missing listed index file, a transient awk/cp
-    # error) must NOT abort the function after `rm -f InRelease Release.gpg`
-    # (line below) but before the re-sign — that would publish a half-signed
-    # (effectively unsigned) suite to GitHub Pages. Save the caller's exact
-    # option set, drop errexit + pipefail locally, and install a single RETURN
-    # trap as the sole restore point so the caller's options are restored on
-    # EVERY return path (early `return 0`, normal end-of-function). The function
-    # itself never re-enables `set -e`/`pipefail`.
-    local _saved_opts; _saved_opts="$(set +o)"
-    set +e +o pipefail
-    trap 'eval "${_saved_opts}"' RETURN
-
-    # Declared once here so the `for algo` loops below do not re-declare
-    # `cmd`/`rh` on each iteration.
-    local cmd rh
-
-    # Empty-but-signed suites still have a Release; guard anyway. The RETURN trap
-    # restores the caller's options even on this early return.
+    # Empty-but-signed suites still have a Release; guard anyway.
     [[ -f "${lrelease}" ]] || return 0
 
-    # 1) by-hash for every checksummed index (strongest algo: SHA256, +SHA512 if present).
+    # 1) by-hash for every checksummed index (SHA256, plus SHA512 if present).
     #    reprepro lists files under a "<Algo>:" section as "<hash> <size> <relpath>".
     #    The awk parser turns on at the "<Algo>:" header, stops at the next
     #    "^[A-Za-z0-9-]+:" header, and emits "<hash> <relpath>" pairs in between.
-    local algo
     for algo in SHA256 SHA512; do
-        awk -v a="${algo}:" '$0==a{f=1;next} /^[A-Za-z0-9-]+:/{f=0} f{print $1, $3}' "${lrelease}" \
-        | while read -r hash relpath; do
-            local src="${ldist}/${relpath}"
-            # Skip relpaths whose source file does not exist (defensively handles
-            # algos reprepro may not emit).
+        if ! lentries="$(awk -v a="${algo}:" '$0==a{f=1;next} /^[A-Za-z0-9-]+:/{f=0} f{print $1, $3}' "${lrelease}")"; then
+            echo "ERROR: ${lsuite}: could not read the ${algo} list in Release" >&2
+            return 1
+        fi
+        while read -r hash relpath; do
+            [[ -n "${relpath}" ]] || continue
+            src="${ldist}/${relpath}"
             [[ -f "${src}" ]] || continue
-            local bhdir
             bhdir="$(dirname "${src}")/by-hash/${algo}"
-            mkdir -p "${bhdir}"
-            cp -f "${src}" "${bhdir}/${hash}"
-        done
+            if ! mkdir -p "${bhdir}" || ! cp -f "${src}" "${bhdir}/${hash}"; then
+                echo "ERROR: ${lsuite}: could not write ${bhdir}/${hash}" >&2
+                return 1
+            fi
+        done <<< "${lentries}"
     done
 
     # 2) inject Acquire-By-Hash idempotently. Field order in a deb822 Release is
     #    not significant, so inserting after the Suite: line is safe.
-    grep -q '^Acquire-By-Hash:' "${lrelease}" \
-        || sed -i '/^Suite:/a Acquire-By-Hash: yes' "${lrelease}"
+    if ! grep -q '^Acquire-By-Hash:' "${lrelease}"; then
+        if ! sed -i '/^Suite:/a Acquire-By-Hash: yes' "${lrelease}" \
+            || ! grep -q '^Acquire-By-Hash: yes' "${lrelease}"; then
+            echo "ERROR: ${lsuite}: could not add Acquire-By-Hash to Release" >&2
+            return 1
+        fi
+    fi
 
     # 3) by-hash for the Release file itself, computed AFTER injection so the
     #    by-hash Release stays byte-identical to the served Release.
     for algo in SHA256 SHA512; do
         cmd="${algo,,}sum"
         command -v "${cmd}" >/dev/null || continue
-        rh="$(${cmd} "${lrelease}" | awk '{print $1}')"
-        mkdir -p "${ldist}/by-hash/${algo}"
-        cp -f "${lrelease}" "${ldist}/by-hash/${algo}/${rh}"
+        rh="$("${cmd}" "${lrelease}" | awk '{print $1}')"
+        if [[ -z "${rh}" ]] || ! mkdir -p "${ldist}/by-hash/${algo}" \
+            || ! cp -f "${lrelease}" "${ldist}/by-hash/${algo}/${rh}"; then
+            echo "ERROR: ${lsuite}: could not write the ${algo} by-hash copy of Release" >&2
+            return 1
+        fi
     done
 
     # 4) re-sign (key already in keyring): drop the stale signatures, then
     #    regenerate the inline (InRelease) and detached (Release.gpg) signatures.
-    rm -f "${ldist}/InRelease" "${ldist}/Release.gpg"
-    gpg --batch --yes --clearsign -o "${ldist}/InRelease"   "${lrelease}"
-    gpg --batch --yes -abs        -o "${ldist}/Release.gpg" "${lrelease}"
+    if ! rm -f "${ldist}/InRelease" "${ldist}/Release.gpg"; then
+        echo "ERROR: ${lsuite}: could not remove the old signatures" >&2
+        return 1
+    fi
+    if ! gpg --batch --yes --clearsign -o "${ldist}/InRelease" "${lrelease}"; then
+        echo "ERROR: ${lsuite}: gpg --clearsign failed; InRelease not written" >&2
+        rm -f "${ldist}/InRelease"
+        return 1
+    fi
+    if ! gpg --batch --yes -abs -o "${ldist}/Release.gpg" "${lrelease}"; then
+        echo "ERROR: ${lsuite}: gpg detached signing failed; Release.gpg not written" >&2
+        rm -f "${ldist}/Release.gpg"
+        return 1
+    fi
+
+    # 5) check what was just written: both signatures verify, and the text
+    #    InRelease signs is exactly the Release on disk.
+    if ! gpg --batch --quiet --verify "${ldist}/InRelease" 2>/dev/null; then
+        echo "ERROR: ${lsuite}: the new InRelease does not verify" >&2
+        return 1
+    fi
+    if ! gpg --batch --quiet --verify "${ldist}/Release.gpg" "${lrelease}" 2>/dev/null; then
+        echo "ERROR: ${lsuite}: the new Release.gpg does not verify against Release" >&2
+        return 1
+    fi
+    if ! gpg --batch --quiet --decrypt "${ldist}/InRelease" 2>/dev/null | cmp -s - "${lrelease}"; then
+        echo "ERROR: ${lsuite}: the text signed in InRelease differs from Release" >&2
+        return 1
+    fi
+    return 0
 }
 
 # ============================================

@@ -106,6 +106,18 @@ assert_equals "namespaced series 0 -> highest common/v0.*" \
 assert_equals "namespaced ignores image/storage" \
     "0" "$(list_upstream_tags "${C}" container-configs 0 | grep -cE '^(image|storage)/' || true)"
 
+echo "=== pasta (passt release tags YYYY_MM_DD.<sha>) ==="
+PASTA_TAGS=$'2025_12_31.aaaaaaa\n2026_10_02.cba3570\n2026_09_25.df90211\nv1.0\nsomething-else'
+assert_equals "pasta: newest release date first" \
+    "2026_10_02.cba3570" "$(printf '%s\n' "${PASTA_TAGS}" | _rank_upstream_tags pasta | head -n1)"
+assert_equals "pasta: year boundary sorts by date" \
+    "2025_12_31.aaaaaaa" "$(printf '%s\n' "${PASTA_TAGS}" | _rank_upstream_tags pasta | tail -n1)"
+assert_equals "pasta: non-release tags are ignored" \
+    "3" "$(printf '%s\n' "${PASTA_TAGS}" | _rank_upstream_tags pasta | wc -l | tr -d ' ')"
+assert_equals "pasta tag -> package version" "20261002" "$(pasta_version_from_tag 2026_10_02.cba3570)"
+assert_equals "8-digit date passes through" "20261101" "$(pasta_version_from_tag 20261101)"
+assert_equals "non-passt tag rejected" "rejected" "$(pasta_version_from_tag v1.2 2>/dev/null || echo rejected)"
+
 echo "=== soak window (resolve_component, NOW fixed) ==="
 assert_equals "series=6 soak=7 -> v6.0.1 (skips fresh 6.0.2/6.1.0, never 7.x)" \
     "v6.0.1" "$(PODMAN_SERIES=6 STABLE_SOAK_DAYS=7 resolve_component podman PODMAN_TAG PODMAN_SERIES "${P}")"

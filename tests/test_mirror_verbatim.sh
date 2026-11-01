@@ -14,7 +14,8 @@
 #
 # Pure bash + curl + awk; runs everywhere. Hash-integrity assertions
 # (Test groups 4/5) require sha256sum/sha512sum and are skipped with a note
-# on hosts without them; CI exercises them.
+# on hosts without them; CI exercises them. Test 7 (server errors) needs
+# python3 for tests/lib/mock_http_server.py.
 
 set -euo pipefail
 
@@ -88,6 +89,13 @@ if ! grep -q "^mirror_suite_verbatim()" "${CI_PUBLISH}"; then
 fi
 eval "$(sed -n '/^mirror_suite_verbatim()/,/^}/p' "${CI_PUBLISH}")"
 
+# mirror_suite_verbatim downloads through fetch_url.
+# shellcheck source=scripts/ci_helpers.sh
+source "${PROJECT_ROOT}/scripts/ci_helpers.sh"
+# shellcheck source=tests/lib/mock_http.sh
+source "${SCRIPT_DIR}/lib/mock_http.sh"
+export FETCH_RETRY_DELAY=0 FETCH_ATTEMPTS=2
+
 # ============================================
 # Fixture: a live repo under a path-segmented URL
 # ============================================
@@ -106,7 +114,7 @@ hash_file() {
 }
 
 TMP="$(mktemp -d)"
-trap 'rm -rf "${TMP}"' EXIT
+trap 'stop_mock_http; rm -rf "${TMP}"' EXIT
 
 SUITE="stable-bookworm"
 WWW="${TMP}/www/podman-debian"
@@ -278,6 +286,40 @@ rc=0
 mirror_suite_verbatim "${SUITE}" "file://${TMP}/broken3/podman-debian" "${OUT6}" || rc=$?
 assert_equals "returns 1 when InRelease is missing" "1" "${rc}"
 assert_absent "no unsigned tree placed in output" "${OUT6}/dists/${SUITE}"
+
+# ============================================
+# Test 7: a server error is not "absent": it returns 2 and places nothing
+# ============================================
+
+echo ""
+echo "Test 7: server errors stop the mirror instead of looking like a missing suite"
+
+if command -v python3 >/dev/null 2>&1; then
+    for target in Release InRelease main/binary-amd64/Packages; do
+        start_mock_http "${TMP}/www" "${TMP}/hits.log" --rule "/dists/${SUITE}/${target}\$=503"
+        OUT7="${TMP}/out7-${target//\//-}"
+        rc=0
+        mirror_suite_verbatim "${SUITE}" "${MOCK_URL}/podman-debian" "${OUT7}" 2>/dev/null || rc=$?
+        assert_equals "HTTP 503 on ${target} returns 2 (abort), not 1" "2" "${rc}"
+        assert_absent "nothing placed after a 503 on ${target}" "${OUT7}/dists/${SUITE}"
+        stop_mock_http
+    done
+    start_mock_http "${TMP}/www" "${TMP}/hits.log"
+    OUT7="${TMP}/out7-ok"
+    rc=0
+    mirror_suite_verbatim "${SUITE}" "${MOCK_URL}/podman-debian" "${OUT7}" 2>/dev/null || rc=$?
+    assert_equals "same tree over HTTP without errors returns 0" "0" "${rc}"
+    rc=0
+    mirror_suite_verbatim "v5-bookworm" "${MOCK_URL}/podman-debian" "${TMP}/out7-absent" 2>/dev/null || rc=$?
+    assert_equals "HTTP 404 on Release returns 1 (not published)" "1" "${rc}"
+    stop_mock_http
+else
+    skip "server error checks (python3 not available)"
+    if [[ "${REQUIRE_INTEGRATION_DEPS:-0}" == "1" ]]; then
+        echo "  FAIL: REQUIRE_INTEGRATION_DEPS=1 but python3 is missing."
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+    fi
+fi
 
 # ============================================
 # Summary

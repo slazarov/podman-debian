@@ -222,6 +222,28 @@ else
     echo "  SKIP: dpkg-query/ldd not available (non-Debian host)"
 fi
 
+echo ""
+echo "Test 6b: owner recorded under /lib, as in bookworm's dpkg database"
+if command -v ldd &>/dev/null && command -v objdump &>/dev/null; then
+    # bookworm's dpkg database lists libc6's files under /lib even though
+    # /lib is a symlink to /usr/lib, so a lookup of the realpath finds no
+    # owner. This stub answers only for /lib paths.
+    _lib_only_result="$(
+        dpkg-query() {
+            if [[ "$2" == /lib/* ]]; then
+                printf 'libfake-lib-only:amd64: %s\n' "$2"
+                return 0
+            fi
+            echo "dpkg-query: no path found matching pattern $2" >&2
+            return 1
+        }
+        detect_runtime_depends "$(command -v cat)"
+    )" || _lib_only_result="FAILED"
+    assert_equals "owner found via the /lib path" "libfake-lib-only" "${_lib_only_result}"
+else
+    echo "  SKIP: ldd/objdump not available"
+fi
+
 # ============================================
 # Tests 7-9: DT_NEEDED semantics (dpkg host + objdump + gcc only)
 #   7: a static binary yields an empty dep set and exit 0 (not a hard-fail)

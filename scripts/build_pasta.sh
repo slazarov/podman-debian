@@ -25,13 +25,18 @@ log_build_output "pasta"
 step_start "Cloning repository"
 git_clone_update git://passt.top/passt passt
 cd "${BUILD_ROOT}/passt"
-git fetch --all
-git fetch --tags
-git pull
 step_done
 
-step_start "Saving version"
-export GIT_CHECKED_OUT_TAG=$(date +"%Y%m%d")
+step_start "Checking out version"
+if [[ -n "${PASTA_TAG:-}" ]]; then
+    # stable/v5: the passt release the resolver picked.
+    git_checkout "${PASTA_TAG}"
+else
+    # nightly, or an unpinned local build: upstream HEAD, versioned by date.
+    git checkout master
+    git pull origin master
+    export GIT_CHECKED_OUT_TAG=$(date +"%Y%m%d")
+fi
 step_done
 
 step_start "Logging version"
@@ -40,10 +45,7 @@ step_done
 
 step_start "Configuring ccache"
 # Enable ccache for C build caching when configured
-if [[ "${CCACHE_ENABLED:-false}" == "true" ]] && command -v ccache &>/dev/null; then
-    export CC="ccache gcc"
-    echo "  ccache enabled for C compilation"
-fi
+enable_c_compiler_cache
 step_done
 
 step_start "Building"

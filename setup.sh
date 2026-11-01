@@ -49,7 +49,7 @@ run_script() {
     source "${toolpath}/scripts/${script}"
 
     COMPONENTS_OK+=("${script}")
-    script_done "${script}"
+    script_done "${script}" "${script_start_time}"
 }
 
 # Install Requirements

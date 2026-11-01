@@ -36,8 +36,8 @@ extract_version() {
 
     case "$component" in
         pasta)
-            # Date-based: already numeric (e.g., 20250302)
-            echo "${tag}"
+            # passt release tag 2026_10_02.cba3570 -> 20261002
+            pasta_version_from_tag "${tag}"
             ;;
         container-configs)
             # Namespaced tag: common/v0.67.0 -> 0.67.0
@@ -284,7 +284,7 @@ declare -A COMPONENT_TAGS=(
     ["conmon"]="${CONMON_TAG}"
     ["netavark"]="${NETAVARK_TAG}"
     ["aardvark-dns"]="${AARDVARK_DNS_TAG}"
-    ["pasta"]=""
+    ["pasta"]="${PASTA_TAG:-}"
     ["fuse-overlayfs"]="${FUSE_OVERLAYFS_TAG}"
     ["catatonit"]="${CATATONIT_TAG}"
     ["buildah"]="${BUILDAH_TAG}"
@@ -313,9 +313,17 @@ for component in "${COMPONENTS[@]}"; do
     # Get tag for this component
     local_tag="${COMPONENT_TAGS[${component}]}"
 
-    # Special case: pasta uses date-based version
-    if [[ "${component}" == "pasta" ]]; then
-        local_tag="$(date +"%Y%m%d")"
+    # pasta: use the passt release tag the build checked out (stable/v5). Only
+    # an exact match counts; the nearest older tag would label a newer master
+    # build with an old release date. Without one (nightly, or an unpinned
+    # build of master) the version is the build date.
+    if [[ "${component}" == "pasta" && -z "${local_tag}" ]]; then
+        local_tag="$(git -C "${BUILD_ROOT}/${COMPONENT_BUILD_DIRS[pasta]}" describe --tags --exact-match HEAD 2>/dev/null || true)"
+        if [[ "${local_tag}" =~ ^[0-9]{4}_[0-9]{2}_[0-9]{2}\. ]]; then
+            echo ">>> Detected passt release tag: ${local_tag}"
+        else
+            local_tag="$(date +"%Y%m%d")"
+        fi
     fi
 
     # Unpinned builds: auto-detect tag from build repo when not pre-resolved

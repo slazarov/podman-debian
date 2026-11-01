@@ -18,22 +18,50 @@
 #      already-published version replacing the pool .deb out from under another
 #      suite's signed index — the "File has unexpected size" apt failure.)
 #
-# Any mismatch fails the whole publish (exit 1) BEFORE the Pages upload, so an
-# internally-inconsistent repository can never reach clients. This is the
-# short guardrail, extended to also cover Release.
+#   3. Release itself: it names its Suite and Codename, has a SHA256 section,
+#      and lists a Packages index for every component and architecture it
+#      declares. Every Packages stanza carries Filename, Size and SHA256 (an
+#      entry without them could never be checked, so it fails instead of
+#      being skipped).
 #
-# Portable: pure bash + awk + sha256sum (or `shasum -a 256`) + `wc -c`. Runs on
-# the CI runner, Debian hosts and macOS (for the unit test).
+#   4. Signatures (with --keyring): InRelease and Release.gpg both verify with
+#      gpgv against the given public keyring (the key clients install), and
+#      the text InRelease signs is byte-identical to Release.
+#
+# Any mismatch fails the whole publish (exit 1) BEFORE the Pages upload, so an
+# internally-inconsistent repository can never reach clients.
+#
+# Portable: bash + awk + sha256sum (or `shasum -a 256`) + `wc -c`, plus gpgv
+# for --keyring. Runs on the CI runner, Debian hosts and macOS (for the unit
+# test).
 
 set -euo pipefail
 
 usage() {
-    echo "Usage: $(basename "$0") <repo-root>" >&2
+    echo "Usage: $(basename "$0") [--keyring <public-keyring>] <repo-root>" >&2
     echo "" >&2
     echo "  <repo-root>  Assembled repository root (contains dists/ and pool/)." >&2
+    echo "  --keyring    Public key file (binary or ASCII-armored) every suite" >&2
+    echo "               must be signed with. Without it, signatures are not checked." >&2
     exit 2
 }
 
+KEYRING=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --keyring)
+            [[ $# -ge 2 ]] || usage
+            KEYRING="$2"
+            shift 2
+            ;;
+        -*)
+            usage
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
 [[ $# -eq 1 ]] || usage
 REPO_ROOT="$1"
 
@@ -59,6 +87,42 @@ _fsize() {
 MISMATCH_COUNT=0
 CHECK_COUNT=0
 
+# gpgv wants a binary keyring given by absolute path, and a home directory
+# of its own so it never reads or writes the caller's ~/.gnupg.
+GPGV_HOME=""
+GPGV_KEYRING=""
+cleanup() {
+    [[ -n "${GPGV_HOME}" ]] && rm -rf "${GPGV_HOME}"
+    return 0
+}
+trap cleanup EXIT
+if [[ -n "${KEYRING}" ]]; then
+    if [[ ! -s "${KEYRING}" ]]; then
+        echo "ERROR: keyring '${KEYRING}' is missing or empty." >&2
+        exit 2
+    fi
+    if ! command -v gpgv >/dev/null 2>&1; then
+        echo "ERROR: --keyring needs gpgv, which is not installed." >&2
+        exit 2
+    fi
+    GPGV_HOME="$(mktemp -d)"
+    chmod 700 "${GPGV_HOME}"
+    GPGV_KEYRING="${GPGV_HOME}/keyring.gpg"
+    if LC_ALL=C grep -q -- '-----BEGIN PGP' "${KEYRING}"; then
+        if ! gpg --batch --homedir "${GPGV_HOME}" --dearmor -o "${GPGV_KEYRING}" "${KEYRING}" 2>/dev/null; then
+            echo "ERROR: could not dearmor keyring '${KEYRING}'." >&2
+            exit 2
+        fi
+    else
+        cp "${KEYRING}" "${GPGV_KEYRING}"
+    fi
+fi
+
+# gpgv_ok <args...> -> 0 when gpgv accepts the signature.
+gpgv_ok() {
+    gpgv --homedir "${GPGV_HOME}" --keyring "${GPGV_KEYRING}" "$@" >/dev/null 2>&1
+}
+
 fail() {
     echo "  MISMATCH: $1" >&2
     MISMATCH_COUNT=$((MISMATCH_COUNT + 1))
@@ -75,6 +139,53 @@ for suite_dir in "${REPO_ROOT}/dists"/*/; do
     release="${suite_dir}Release"
     [[ -f "${release}" ]] || continue
     echo ">>> Suite: ${suite}"
+
+    # ---- Property 3: Release names itself and lists what it declares ---------
+    CHECK_COUNT=$((CHECK_COUNT + 1))
+    for field in Suite Codename; do
+        if ! grep -qE "^${field}: [^[:space:]]" "${release}"; then
+            fail "${suite}: Release has no ${field} field"
+        fi
+    done
+    sha256_list="$(awk '$0=="SHA256:"{f=1;next} /^[A-Za-z0-9-]+:/{f=0} f{print $3}' "${release}")"
+    if ! grep -qx 'SHA256:' "${release}" || [[ -z "${sha256_list}" ]]; then
+        fail "${suite}: Release has no SHA256 section"
+    fi
+    archs="$(awk -F': ' '$1=="Architectures"{print $2; exit}' "${release}")"
+    comps="$(awk -F': ' '$1=="Components"{print $2; exit}' "${release}")"
+    if [[ -z "${archs}" || -z "${comps}" ]]; then
+        fail "${suite}: Release has no Architectures or Components field"
+    fi
+    for comp in ${comps}; do
+        for arch in ${archs}; do
+            [[ "${arch}" == "source" || "${arch}" == "all" ]] && continue
+            if ! grep -qxF "${comp}/binary-${arch}/Packages" <<< "${sha256_list}"; then
+                fail "${suite}: Release does not list ${comp}/binary-${arch}/Packages"
+            fi
+        done
+    done
+
+    # ---- Property 4: signatures (only with --keyring) --------------------------
+    if [[ -n "${GPGV_KEYRING}" ]]; then
+        CHECK_COUNT=$((CHECK_COUNT + 1))
+        if [[ ! -f "${suite_dir}InRelease" ]]; then
+            fail "${suite}: InRelease is missing"
+        elif ! gpgv_ok "${suite_dir}InRelease"; then
+            fail "${suite}: InRelease does not verify with the published key"
+        else
+            payload="${GPGV_HOME}/payload"
+            rm -f "${payload}"
+            if ! gpgv_ok --output "${payload}" "${suite_dir}InRelease" \
+                || ! cmp -s "${payload}" "${release}"; then
+                fail "${suite}: the text InRelease signs differs from Release"
+            fi
+        fi
+        if [[ ! -f "${suite_dir}Release.gpg" ]]; then
+            fail "${suite}: Release.gpg is missing"
+        elif ! gpgv_ok "${suite_dir}Release.gpg" "${release}"; then
+            fail "${suite}: Release.gpg does not verify Release with the published key"
+        fi
+    fi
 
     # ---- Property 1: Release <-> the indexes it lists (SHA256 section) --------
     # reprepro lists each checksummed file as "<sha256> <size> <relpath>" under a
@@ -110,32 +221,41 @@ for suite_dir in "${REPO_ROOT}/dists"/*/; do
             fi
         fi
 
-        # One (Filename, Size, SHA256) triple per stanza.
-        while read -r filename size sha256; do
-            [[ -n "${filename}" ]] || continue
+        # One (Package, Filename, Size, SHA256) record per stanza. A missing
+        # field prints as "-" so the columns stay aligned.
+        while read -r package filename size sha256; do
+            [[ -n "${package}" ]] || continue
             CHECK_COUNT=$((CHECK_COUNT + 1))
+            if [[ "${filename}" == "-" || "${size}" == "-" || "${sha256}" == "-" ]]; then
+                fail "${suite}: Packages stanza for ${package} lacks Filename, Size or SHA256"
+                continue
+            fi
             pool_file="${REPO_ROOT}/${filename}"
             if [[ ! -f "${pool_file}" ]]; then
                 fail "${suite}: index references ${filename} but it is missing from pool/"
                 continue
             fi
             act_size="$(_fsize "${pool_file}")"
-            if [[ -n "${size}" && "${act_size}" != "${size}" ]]; then
+            if [[ "${act_size}" != "${size}" ]]; then
                 fail "${suite}: ${filename} pool size ${act_size} != index Size ${size}"
                 continue
             fi
-            if [[ -n "${sha256}" ]]; then
-                act_hash="$(_sha256 "${pool_file}")"
-                if [[ "${act_hash}" != "${sha256}" ]]; then
-                    fail "${suite}: ${filename} pool sha256 != index SHA256"
-                fi
+            act_hash="$(_sha256 "${pool_file}")"
+            if [[ "${act_hash}" != "${sha256}" ]]; then
+                fail "${suite}: ${filename} pool sha256 != index SHA256"
             fi
         done < <(awk '
+            function emit() {
+                if (pk != "" || fn != "")
+                    print (pk == "" ? "?" : pk), (fn == "" ? "-" : fn), (sz == "" ? "-" : sz), (sha == "" ? "-" : sha)
+                pk = ""; fn = ""; sz = ""; sha = ""
+            }
+            /^Package:/  { pk=$2 }
             /^Filename:/ { fn=$2 }
             /^Size:/     { sz=$2 }
             /^SHA256:/   { sha=$2 }
-            /^[[:space:]]*$/ { if (fn!="") print fn, sz, sha; fn=""; sz=""; sha="" }
-            END { if (fn!="") print fn, sz, sha }' "${pkgs}")
+            /^[[:space:]]*$/ { emit() }
+            END { emit() }' "${pkgs}")
     done
 done
 shopt -u nullglob
@@ -147,6 +267,10 @@ if [[ ${MISMATCH_COUNT} -gt 0 ]]; then
     echo "========================================"
     exit 1
 fi
-echo ">>> OK: ${CHECK_COUNT} checks passed; every suite's index matches Release and pool"
+if [[ -n "${GPGV_KEYRING}" ]]; then
+    echo ">>> OK: ${CHECK_COUNT} checks passed; every suite is signed, and its index matches Release and pool"
+else
+    echo ">>> OK: ${CHECK_COUNT} checks passed; every suite's index matches Release and pool (signatures not checked)"
+fi
 echo "========================================"
 exit 0

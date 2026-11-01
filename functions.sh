@@ -198,7 +198,29 @@ detect_runtime_depends() {
             # the caller's `set -euo pipefail`, a pipeline failure here could
             # otherwise abort with an opaque ERR-trap message before the
             # explicit guard below ever runs.
-            if ! dpkg_out="$(dpkg-query -S "${resolved}" 2>&1)"; then
+            #
+            # bookworm is usr-merged on disk, but its dpkg database still
+            # records many libraries under /lib (libc6 owns
+            # /lib/x86_64-linux-gnu/libc.so.6, not the /usr/lib path realpath
+            # returns). trixie moved those records to /usr. So if the resolved
+            # path has no owner, also try the path ldd printed and the same
+            # paths with the /usr prefix added or removed.
+            local lcandidate lfound=0
+            local -a lcandidates=( "${resolved}" "${lib}" )
+            for lcandidate in "${resolved}" "${lib}"; do
+                if [[ "${lcandidate}" == /usr/* ]]; then
+                    lcandidates+=( "${lcandidate#/usr}" )
+                else
+                    lcandidates+=( "/usr${lcandidate}" )
+                fi
+            done
+            for lcandidate in "${lcandidates[@]}"; do
+                if dpkg_out="$(dpkg-query -S "${lcandidate}" 2>&1)"; then
+                    lfound=1
+                    break
+                fi
+            done
+            if [[ "${lfound}" -eq 0 ]]; then
                 echo "ERROR: no owning package for ${lib} -> ${resolved} (linked by ${bin})" >&2
                 echo "  dpkg-query: ${dpkg_out}" >&2
                 return 1
@@ -253,6 +275,10 @@ _rank_upstream_tags() {
     if [[ "${lcomponent}" == "container-configs" ]]; then
         lfilter='^common/v[0-9]'
         lstrip='common/v'
+    elif [[ "${lcomponent}" == "pasta" ]]; then
+        # passt release tags are YYYY_MM_DD.<sha>; version-sort orders them by date.
+        lfilter='^[0-9]{4}_[0-9]{2}_[0-9]{2}\.'
+        lstrip=''
     else
         lfilter='^v?[0-9]'
         lstrip='v'
@@ -275,6 +301,21 @@ _rank_upstream_tags() {
         fi
         printf '%s %s\n' "${lsv}" "${lt}"
     done | sort --reverse --version-sort -k1 | awk '{print $2}'
+}
+
+# pasta_version_from_tag <tag> -- print the package version for a passt release
+# tag. passt tags its releases YYYY_MM_DD.<sha> (2026_10_02.cba3570); the package
+# version is the date alone (20261002). An 8-digit date is passed through.
+pasta_version_from_tag() {
+    local ltag="$1"
+    if [[ "${ltag}" =~ ^([0-9]{4})_([0-9]{2})_([0-9]{2})(\..+)?$ ]]; then
+        printf '%s%s%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}"
+    elif [[ "${ltag}" =~ ^[0-9]{8}$ ]]; then
+        printf '%s\n' "${ltag}"
+    else
+        echo "ERROR: not a passt release tag: '${ltag}' (want YYYY_MM_DD.<sha>)" >&2
+        return 1
+    fi
 }
 
 get_latest_tag() {
@@ -613,10 +654,13 @@ script_start() {
     export _SCRIPT_START=$(date +%s)
 }
 
+# script_done <name> [start-epoch] -- print the elapsed time since start-epoch,
+# or since script_start when no start time is given.
 script_done() {
     local script_name="$1"
+    local start="${2:-${_SCRIPT_START}}"
     local end=$(date +%s)
-    local elapsed=$((end - _SCRIPT_START))
+    local elapsed=$((end - start))
     echo ">>> Completed: ${script_name} in $(format_duration $elapsed)"
 }
 
@@ -677,6 +721,45 @@ run_logged() {
         echo "========================================" >&2
         return $rc
     fi
+}
+
+# ============================================
+# Compiler caches
+# ============================================
+
+# enable_rust_compiler_cache -> when SCCACHE_ENABLED=true, export
+# RUSTC_WRAPPER=sccache for the cargo build that follows. If sccache is not
+# installed, warn and build uncached, or fail when CACHE_STRICT=true.
+enable_rust_compiler_cache() {
+    [[ "${SCCACHE_ENABLED:-false}" == "true" ]] || return 0
+    if command -v sccache &>/dev/null; then
+        export RUSTC_WRAPPER=sccache
+        echo "  sccache enabled for Rust compilation (${SCCACHE_DIR:-default dir}, max ${SCCACHE_CACHE_SIZE:-default})"
+        return 0
+    fi
+    if [[ "${CACHE_STRICT:-false}" == "true" ]]; then
+        echo "ERROR: SCCACHE_ENABLED=true and CACHE_STRICT=true, but sccache is not installed" >&2
+        return 1
+    fi
+    echo "  WARNING: SCCACHE_ENABLED=true but sccache is not installed; building without it" >&2
+    return 0
+}
+
+# enable_c_compiler_cache -> when CCACHE_ENABLED=true, export CC="ccache gcc"
+# for the C build that follows. Same missing-tool rules as above.
+enable_c_compiler_cache() {
+    [[ "${CCACHE_ENABLED:-false}" == "true" ]] || return 0
+    if command -v ccache &>/dev/null; then
+        export CC="ccache gcc"
+        echo "  ccache enabled for C compilation (${CCACHE_DIR:-default dir}, max ${CCACHE_MAXSIZE:-default})"
+        return 0
+    fi
+    if [[ "${CACHE_STRICT:-false}" == "true" ]]; then
+        echo "ERROR: CCACHE_ENABLED=true and CACHE_STRICT=true, but ccache is not installed" >&2
+        return 1
+    fi
+    echo "  WARNING: CCACHE_ENABLED=true but ccache is not installed; building without it" >&2
+    return 0
 }
 
 # ============================================
