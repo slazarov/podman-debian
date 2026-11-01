@@ -28,6 +28,7 @@ Notable changes to this project are recorded here, in the format of [Keep a Chan
 - Each workflow job gets only the permissions it needs, and no checkout keeps its credentials.
 - The republish guard also compares `podman-suite`.
 - The lint workflow installs reprepro, gpg and dpkg-dev and sets `REQUIRE_INTEGRATION_DEPS=1`, so the integration tests run instead of skipping.
+- `podman-podman` recommends `dbus-user-session`, as Debian's `podman` does. Without a per-user D-Bus socket, rootless Podman on a minimal system falls back to the cgroupfs cgroup manager. The packaging revision goes to 2 (`~deb12.podman2`, `~deb13.podman2`) so both releases republish. `apt upgrade` installs the new Recommends; `apt-get upgrade` and unattended-upgrades do not, so `docs/apt-repository.md` tells those hosts to install it. The repository smoke test checks that a fresh install gets it.
 
 ### Fixed
 
@@ -36,6 +37,7 @@ Notable changes to this project are recorded here, in the format of [Keep a Chan
 - Regenerated suites keep the previous generation of their indexes under `by-hash/`, so a client holding the old `Release` during a deploy still finds them.
 - A failing `gpg --clearsign` is no longer hidden by a successful detached signature. Signing failures stop the publish, and the integrity gate checks every suite's signatures against the published key.
 - The integrity gate fails on a `Release` without `Suite`, `Codename`, a `SHA256` section or a `Packages` entry per architecture, and on a `Packages` stanza without `Size` or `SHA256`.
+- The README's example `.sources` block used `stable-bookworm` while the text told Debian 13 users to pick `stable-trixie`. It now fills in the suite from `/etc/os-release`, and so do the track-switch examples in the README and `docs/apt-repository.md`, which hard-coded `stable-bookworm`.
 - The smoke test reads the assembled repository with `Signed-By` instead of `Trusted: yes`, fails on a network error while probing the live repository instead of skipping the upgrade scenario, and checks the installed versions after the upgrade.
 
 [Unreleased]: https://github.com/slazarov/podman-debian/commits/main

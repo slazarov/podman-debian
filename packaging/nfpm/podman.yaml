@@ -18,6 +18,8 @@ depends:
   - podman-netavark
   - podman-aardvark-dns
   - podman-pasta
+  # Debian's podman only recommends catatonit. Here it is a Depends, so it is
+  # always installed and is not repeated under recommends.
   - podman-catatonit
   - podman-container-configs
   # newuidmap/newgidmap -- rootless Podman refuses to start without them
@@ -31,6 +33,11 @@ recommends:
   # only needed for storage already created with it (.has-mount-program) or on
   # filesystems native overlay can't back. Recommends keeps it for upgraders.
   - podman-fuse-overlayfs
+  # Per-user D-Bus session bus. Without it, rootless Podman on a minimal
+  # system has no /run/user/$UID/bus, cannot reach the systemd user manager
+  # and falls back to the cgroupfs cgroup manager. Debian's podman recommends
+  # it too.
+  - dbus-user-session
 
 conflicts:
   - podman

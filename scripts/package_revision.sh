@@ -11,5 +11,5 @@
 # same filename in the pool, discarding the new build. A bump changes every
 # package's filename once, so the whole set republishes.
 #
-# History: 1 = initial.
-export PACKAGE_REVISION="${PACKAGE_REVISION:-1}"
+# History: 1 = initial; 2 = podman-podman Recommends dbus-user-session.
+export PACKAGE_REVISION="${PACKAGE_REVISION:-2}"

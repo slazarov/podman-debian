@@ -245,6 +245,18 @@ assert_dpkg_clean() {
     fi
 }
 
+# Checks that apt installed a package podman-podman only recommends. A typo
+# in the Recommends field, or an entry that is dropped, does not fail the
+# install, so nothing else would notice.
+assert_installed() {
+    local lpkg="$1"
+    if ! dpkg-query -W -f='${Status}' "${lpkg}" 2> /dev/null | grep -q 'install ok installed'; then
+        echo "FAIL: ${lpkg} is not installed" >&2
+        return 1
+    fi
+    echo ">>> ${lpkg} installed"
+}
+
 rootless_network_check() {
     useradd -m smoke
     grep -q '^smoke:' /etc/subuid || usermod --add-subuids 100000-165535 --add-subgids 100000-165535 smoke
@@ -272,6 +284,9 @@ apt-get update -qq
 # minimal image; the rootless check pulls from quay.io over TLS.
 apt-get install -y -q ca-certificates podman-suite
 assert_dpkg_clean
+# Recommends are installed by default; the rootless check below forces the
+# cgroupfs manager, so it would pass without the user session bus.
+assert_installed dbus-user-session
 podman info --log-level=error > /dev/null
 echo ">>> rootful podman info OK"
 rootless_network_check
