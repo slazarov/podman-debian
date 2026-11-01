@@ -34,7 +34,7 @@ Standalone scripts and the tests read only this block, from the `VALID_TRACKS=` 
 | `ARCH` | detected by `detect_architecture` | Target architecture. Only `amd64` is supported. Sets `GOARCH`, `PROTOC_ARCH`, `RUSTUP_ARCH` and `SCCACHE_ARCH`. |
 | `NPROC` | `$(nproc)` | Parallel job count for `make` and `cargo`. |
 | `SHALLOW_CLONE` | `true` | Shallow-clone upstream repositories. Must be `false` for nightly, which needs history for `git describe`. |
-| `PACKAGE_REVISION` | `1` (in `scripts/package_revision.sh`) | The `N` in the `~deb{VERSION_ID}.podman{N}` suffix. Bump the default whenever packaging changes without an upstream version change. Otherwise apt sees an identical version and the publish step keeps the already-published `.deb`. |
+| `PACKAGE_REVISION` | `2` (in `scripts/package_revision.sh`) | The `N` in the `~deb{VERSION_ID}.podman{N}` suffix. Bump the default whenever packaging changes without an upstream version change. Otherwise apt sees an identical version and the publish step keeps the already-published `.deb`. |
 | `DESTDIR` | none | Staging tree that build scripts install into and `package_all.sh` reads from. Required for packaging. |
 | `BUILD_ROOT` | `${toolpath}/build` | Directory for cloned sources and downloads. |
 | `SKIP_FUSE_CHECK` | `false` | Marks a build-only environment, such as a CI container, where `/dev/fuse` is not usable. It only changes the wording of the FUSE preflight warning. That check never fails the build: compilation never opens `/dev/fuse`. |

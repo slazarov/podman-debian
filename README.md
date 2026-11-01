@@ -24,13 +24,13 @@ sudo curl -fsSL -o /etc/apt/keyrings/podman-debian.gpg \
   https://slazarov.github.io/podman-debian/podman-debian.gpg
 ```
 
-Add the repository. Pick the suite for your release: `stable-bookworm` on Debian 12, `stable-trixie` on Debian 13.
+Add the repository. The command fills in your release's suite from `/etc/os-release`: `stable-bookworm` on Debian 12, `stable-trixie` on Debian 13.
 
 ```bash
-sudo tee /etc/apt/sources.list.d/podman-debian.sources << 'EOF'
+sudo tee /etc/apt/sources.list.d/podman-debian.sources << EOF
 Types: deb
 URIs: https://slazarov.github.io/podman-debian
-Suites: stable-bookworm
+Suites: stable-$(. /etc/os-release && echo "$VERSION_CODENAME")
 Components: main
 Signed-By: /etc/apt/keyrings/podman-debian.gpg
 EOF
@@ -58,7 +58,7 @@ Each track is published once per Debian release, as a suite named `<track>-<code
 To move to a newer track, for example from v5 to stable, change the `Suites:` line and upgrade:
 
 ```bash
-sudo sed -i 's/^Suites: .*/Suites: stable-bookworm/' /etc/apt/sources.list.d/podman-debian.sources
+sudo sed -i "s/^Suites: .*/Suites: stable-$(. /etc/os-release && echo "$VERSION_CODENAME")/" /etc/apt/sources.list.d/podman-debian.sources
 sudo apt update
 sudo apt upgrade
 ```

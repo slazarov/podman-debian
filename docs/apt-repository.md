@@ -65,10 +65,10 @@ sudo apt install podman-suite
 
 ## Switching tracks
 
-Change the `Suites:` line and upgrade. For example, to move a bookworm host from v5 to stable:
+Change the `Suites:` line and upgrade. For example, to move from v5 to stable:
 
 ```bash
-sudo sed -i 's/^Suites: .*/Suites: stable-bookworm/' /etc/apt/sources.list.d/podman-debian.sources
+sudo sed -i "s/^Suites: .*/Suites: stable-$(. /etc/os-release && echo "$VERSION_CODENAME")/" /etc/apt/sources.list.d/podman-debian.sources
 sudo apt update
 sudo apt full-upgrade
 ```
@@ -104,7 +104,13 @@ To install only the engine:
 sudo apt install podman-podman
 ```
 
-This also installs crun, conmon, netavark, aardvark-dns, pasta, catatonit, container-configs and `uidmap`. `podman-fuse-overlayfs` is a Recommends: apt installs it by default, and you can leave it out with `--no-install-recommends`. See [fuse-overlayfs is optional](#fuse-overlayfs-is-optional).
+This also installs crun, conmon, netavark, aardvark-dns, pasta, catatonit, container-configs and `uidmap`. `podman-fuse-overlayfs` and `dbus-user-session` are Recommends: apt installs them by default, and you can leave them out with `--no-install-recommends`. See [fuse-overlayfs is optional](#fuse-overlayfs-is-optional).
+
+Rootless Podman needs `dbus-user-session` to use the systemd cgroup manager. Without it, Podman falls back to cgroupfs. `apt upgrade` installs it on hosts that already have `podman-podman`, but `apt-get upgrade` and unattended-upgrades never add new packages. On those hosts, install it yourself:
+
+```bash
+sudo apt install dbus-user-session
+```
 
 ## Versions
 
@@ -204,6 +210,7 @@ Rootless Podman needs a few host features. A source build checks them in `script
   `sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 "$USER"`.
 - `newuidmap` and `newgidmap`, from the `uidmap` package. `podman-podman` depends on it, so apt installs it.
 - FUSE (`/dev/fuse` and the `fuse3` package), only if you use fuse-overlayfs.
+- A systemd user session, for the systemd cgroup manager. This needs `dbus-user-session` and a real login: over SSH, on a console, or with `loginctl enable-linger "$USER"` for a service account. `su` and `sudo -u` from root, or `pct enter` on a Proxmox container, do not start one. After you install `dbus-user-session`, log out and back in. `ls "/run/user/$(id -u)/bus"` shows whether the session bus is there.
 - No `noexec` on `/tmp` or `$HOME`. Remove it from the mount options, or point `TMPDIR` at a filesystem that allows execution.
 
 ### fuse-overlayfs is optional
