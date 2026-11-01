@@ -40,6 +40,11 @@ step_start "Configuring Go optimization"
 export GOGC="${GOGC_BUILD:-off}"
 step_done
 
+step_start "Configuring ccache"
+# conmon is C; its Makefile compiles with $(CC), so ccache applies here too.
+enable_c_compiler_cache
+step_done
+
 step_start "Building"
 run_logged make -j "$NPROC" GCFLAGS="${GO_GCFLAGS}" LDFLAGS="${GO_LDFLAGS}"
 step_done

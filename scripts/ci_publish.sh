@@ -34,6 +34,9 @@ source "${toolpath}/scripts/repo_byhash.sh"
 # Load the landing-page generator (defines generate_index_html).
 source "${toolpath}/scripts/index_html.sh"
 
+# Load the shared CI helpers (fetch_url).
+source "${toolpath}/scripts/ci_helpers.sh"
+
 # Set error trap AFTER sourcing
 trap 'error_handler $? $LINENO "$BASH_SOURCE"' ERR
 
@@ -55,6 +58,9 @@ usage() {
     echo ""
     echo "Environment variables:"
     echo "  GPG_PRIVATE_KEY  If set, imports this GPG key before signing (for CI)"
+    echo "  REPO_KEYRING     Public key the integrity gate checks every signature"
+    echo "                   against (default: <output-directory>/podman-debian.gpg)"
+    echo "  FETCH_ATTEMPTS, FETCH_RETRY_DELAY  Retry policy for live repo downloads"
     echo ""
     echo "This script:"
     echo "  1. Mirrors down the untouched suites' packages from the live repository"
@@ -159,6 +165,13 @@ echo ""
 # (every non-target suite with a live tree). When a live tree 404s (first
 # deploy, or a suite never published) the verbatim copy no-ops cleanly and the
 # suite stays empty.
+#
+# Every download goes through fetch_url (scripts/ci_helpers.sh), which tells
+# "absent" (HTTP 404/410) apart from "failed" (network or TLS error, a cut-off
+# body, HTTP 5xx or 429 after retries). Only "absent" means "not published".
+# A failed download stops the publish: guessing that a suite is empty, or
+# skipping a package because the CDN hiccuped, would deploy a repository
+# that silently lost packages.
 
 declare -A OTHER_SUITE_DEBS_DIRS
 declare -A OTHER_SUITE_COUNTS
@@ -176,9 +189,15 @@ total_other_count=0
 # file manifest and place it into the output repo, preserving the original
 # signatures. repo-url / output-dir default to the caller's REPO_URL /
 # OUTPUT_DIR globals (overridable so tests can drive the function directly).
-# Returns 0 if the live tree existed and was reconstructed verbatim, 1
-# otherwise (first deploy / not published / CDN integrity mismatch). Never
-# aborts the caller.
+#
+# Returns:
+#   0  the live tree existed and was reconstructed verbatim
+#   1  it cannot be served verbatim: the suite is not published (Release is
+#      absent), a signature or listed index is absent, or an index does not
+#      match its signed hash. The caller falls back to re-export.
+#   2  a download failed (see fetch_url). The caller must stop: the live
+#      state is unknown, so neither "absent" nor "verbatim" is safe to assume.
+# Nothing is placed in the output unless it returns 0.
 #
 # GitHub Pages serves no directory listings, so a recursive crawl cannot
 # enumerate the tree. The signed Release already lists every index it
@@ -193,27 +212,38 @@ mirror_suite_verbatim() {
     local lrepo_url="${2:-${REPO_URL}}"
     local loutdir="${3:-${OUTPUT_DIR}}"
     local lbase="${lrepo_url}/dists/${lsuite}"
+    local lrc
 
     local lmirror
     lmirror=$(mktemp -d)
     local ldist="${lmirror}/dists/${lsuite}"
     mkdir -p "${ldist}"
 
-    # The signed Release is both the existence probe and the file manifest. A
-    # fetch failure means first deploy or suite not yet published: no-op.
-    if ! curl -sfL -o "${ldist}/Release" "${lbase}/Release" 2>/dev/null; then
+    # The signed Release is both the existence probe and the file manifest.
+    # Absent means first deploy or suite not yet published.
+    lrc=0
+    fetch_url "${lbase}/Release" "${ldist}/Release" || lrc=$?
+    if [[ "${lrc}" -ne 0 ]]; then
         rm -rf "${lmirror}"
-        return 1
+        [[ "${lrc}" -eq 4 ]] && return 1
+        echo "  ERROR: ${lsuite}: could not download the live Release" >&2
+        return 2
     fi
 
     # The signatures must arrive verbatim — without them the suite cannot be
     # served unchanged, so fall back to the re-export path.
     local lf
     for lf in InRelease Release.gpg; do
-        if ! curl -sfL -o "${ldist}/${lf}" "${lbase}/${lf}" 2>/dev/null; then
+        lrc=0
+        fetch_url "${lbase}/${lf}" "${ldist}/${lf}" || lrc=$?
+        if [[ "${lrc}" -eq 4 ]]; then
             echo "  WARNING: ${lsuite}: live ${lf} missing — not serving verbatim" >&2
             rm -rf "${lmirror}"
             return 1
+        elif [[ "${lrc}" -ne 0 ]]; then
+            echo "  ERROR: ${lsuite}: could not download the live ${lf}" >&2
+            rm -rf "${lmirror}"
+            return 2
         fi
     done
 
@@ -231,10 +261,16 @@ mirror_suite_verbatim() {
                 mkdir -p "$(dirname "${src}")"
                 # A listed-but-missing index means the live tree is incomplete
                 # and cannot be reproduced verbatim.
-                if ! curl -sfL -o "${src}" "${lbase}/${relpath}" 2>/dev/null; then
+                lrc=0
+                fetch_url "${lbase}/${relpath}" "${src}" || lrc=$?
+                if [[ "${lrc}" -eq 4 ]]; then
                     echo "  WARNING: ${lsuite}: listed index ${relpath} missing from live tree — not serving verbatim" >&2
                     rm -rf "${lmirror}"
                     return 1
+                elif [[ "${lrc}" -ne 0 ]]; then
+                    echo "  ERROR: ${lsuite}: could not download listed index ${relpath}" >&2
+                    rm -rf "${lmirror}"
+                    return 2
                 fi
             fi
             # Integrity: fetched bytes must match the signed manifest, or a
@@ -273,6 +309,21 @@ mirror_suite_verbatim() {
     return 0
 }
 
+# parse_packages_index <Packages-file> -> one "<Filename> <Size> <SHA256>"
+# line per stanza (empty fields stay empty).
+parse_packages_index() {
+    awk '
+        /^Filename:/ { fn=$2 }
+        /^Size:/     { sz=$2 }
+        /^SHA256:/   { sha=$2 }
+        /^[[:space:]]*$/ { if (fn!="") print fn, sz, sha; fn=""; sz=""; sha="" }
+        END { if (fn!="") print fn, sz, sha }' "$1"
+}
+
+# HEALED_SUITES: verbatim candidates demoted to re-export because their live
+# pool bytes disagree with their signed index (see HEAL below).
+HEALED_SUITES=()
+
 for other_suite in "${OTHER_SUITES[@]}"; do
     # Cross-pass no-clobber (multi-distro publish): when several distros publish
     # sequentially into ONE accumulating OUTPUT_DIR, a suite already materialized
@@ -301,14 +352,19 @@ for other_suite in "${OTHER_SUITES[@]}"; do
     echo ">>> Mirroring existing '${other_suite}' suite from live repo..."
 
     # Try to serve this non-target suite's signed dists/ tree verbatim.
-    if mirror_suite_verbatim "${other_suite}"; then
+    mirror_rc=0
+    mirror_suite_verbatim "${other_suite}" || mirror_rc=$?
+    if [[ "${mirror_rc}" -eq 0 ]]; then
         IS_VERBATIM["${other_suite}"]=true
         VERBATIM_SUITES+=("${other_suite}")
         MIRRORED_SUITES+=("${other_suite}")
         echo ">>> Mirrored '${other_suite}' dists/ tree verbatim (original signature preserved)"
-    else
+    elif [[ "${mirror_rc}" -eq 1 ]]; then
         IS_VERBATIM["${other_suite}"]=false
-        echo ">>> No live tree for '${other_suite}' (first deploy / not published) — nothing to mirror"
+        echo ">>> No verbatim live tree for '${other_suite}' (not published, or incomplete) — re-export path"
+    else
+        echo "ERROR: could not read the live '${other_suite}' suite; refusing to publish without it." >&2
+        exit 1
     fi
 
     other_dir=$(mktemp -d)
@@ -328,13 +384,29 @@ for other_suite in "${OTHER_SUITES[@]}"; do
     verbatim_pool_paths=()
 
     for arch in "${VALID_ARCHES[@]}"; do
-        packages_url="${REPO_URL}/dists/${other_suite}/main/binary-${arch}/Packages"
-        echo "  Fetching: ${packages_url}"
-
-        packages_content=$(curl -sfL "${packages_url}" 2>/dev/null || true)
-
-        if [[ -z "${packages_content}" ]]; then
-            echo "  No Packages file for ${other_suite}/binary-${arch} (first deploy or not published)"
+        packages_file="${other_dir}/Packages-${arch}"
+        verbatim_packages="${OUTPUT_DIR}/dists/${other_suite}/main/binary-${arch}/Packages"
+        if [[ "${IS_VERBATIM["${other_suite}"]}" == "true" && -f "${verbatim_packages}" ]]; then
+            # The verbatim tree already holds this index, checked against the
+            # signed Release. Use it rather than a second download that a CDN
+            # could answer with a different generation.
+            cp "${verbatim_packages}" "${packages_file}"
+        else
+            packages_url="${REPO_URL}/dists/${other_suite}/main/binary-${arch}/Packages"
+            echo "  Fetching: ${packages_url}"
+            fetch_rc=0
+            fetch_url "${packages_url}" "${packages_file}" || fetch_rc=$?
+            if [[ "${fetch_rc}" -eq 4 ]]; then
+                echo "  No Packages file for ${other_suite}/binary-${arch} (first deploy or not published)"
+                continue
+            elif [[ "${fetch_rc}" -ne 0 ]]; then
+                echo "ERROR: could not download ${packages_url}; refusing to publish without it." >&2
+                exit 1
+            fi
+        fi
+        if [[ ! -s "${packages_file}" ]]; then
+            echo "  Empty Packages file for ${other_suite}/binary-${arch}"
+            rm -f "${packages_file}"
             continue
         fi
 
@@ -344,6 +416,13 @@ for other_suite in "${OTHER_SUITES[@]}"; do
         # ${OUTPUT_DIR}/pool/ so apt can fetch them — AND must match the index's
         # checksums, verified below; (b) for a non-verbatim suite (no live tree to
         # copy, or a demoted one) the debs feed the re-includedeb path (Step 4).
+        #
+        # A failed download (fetch_url 1) stops the publish. curl enforces the
+        # Content-Length, so a cut-off transfer is an error, never a short file.
+        # A pool file the index names but the live site does not have (HTTP
+        # 404) stops it too: regenerating the suite without it would publish a
+        # suite that silently lost a package. Only a complete download whose
+        # bytes differ from the index is recoverable; HEAL below repairs it.
         while read -r filename size sha256; do
             [[ -n "${filename}" ]] || continue
             deb_url="${REPO_URL}/${filename}"
@@ -355,15 +434,16 @@ for other_suite in "${OTHER_SUITES[@]}"; do
                 pool_dest="${OUTPUT_DIR}/${filename}"
                 if [[ ! -f "${pool_dest}" ]]; then
                     mkdir -p "$(dirname "${pool_dest}")"
-                    if curl -sfL -o "${pool_dest}" "${deb_url}"; then
+                    fetch_rc=0
+                    fetch_url "${deb_url}" "${pool_dest}" || fetch_rc=$?
+                    if [[ "${fetch_rc}" -eq 0 ]]; then
                         suite_count=$((suite_count + 1))
+                    elif [[ "${fetch_rc}" -eq 4 ]]; then
+                        echo "ERROR: ${other_suite} lists ${filename}, but the live site does not have it (HTTP 404); refusing to publish the suite without it." >&2
+                        exit 1
                     else
-                        echo "  WARNING: Failed to download pool entry ${deb_basename}" >&2
-                        rm -f "${pool_dest}"
-                        # A referenced-but-unfetchable pool entry means the live
-                        # suite is already inconsistent — heal it via re-export.
-                        verbatim_mismatch=true
-                        continue
+                        echo "ERROR: could not download pool entry ${deb_url}; refusing to publish an incomplete suite." >&2
+                        exit 1
                     fi
                 fi
                 # INTEGRITY: the served index must not lie about the pool bytes.
@@ -388,18 +468,19 @@ for other_suite in "${OTHER_SUITES[@]}"; do
             fi
 
             echo "  Downloading: ${deb_basename}"
-            if curl -sfL -o "${other_dir}/${deb_basename}" "${deb_url}"; then
+            fetch_rc=0
+            fetch_url "${deb_url}" "${other_dir}/${deb_basename}" || fetch_rc=$?
+            if [[ "${fetch_rc}" -eq 0 ]]; then
                 suite_count=$((suite_count + 1))
+            elif [[ "${fetch_rc}" -eq 4 ]]; then
+                echo "ERROR: ${other_suite} lists ${filename}, but the live site does not have it (HTTP 404); refusing to publish the suite without it." >&2
+                exit 1
             else
-                echo "  WARNING: Failed to download ${deb_basename}, skipping" >&2
-                rm -f "${other_dir}/${deb_basename}"
+                echo "ERROR: could not download ${deb_url}; refusing to publish an incomplete suite." >&2
+                exit 1
             fi
-        done <<< "$(printf '%s\n' "${packages_content}" | awk '
-            /^Filename:/ { fn=$2 }
-            /^Size:/     { sz=$2 }
-            /^SHA256:/   { sha=$2 }
-            /^[[:space:]]*$/ { if (fn!="") print fn, sz, sha; fn=""; sz=""; sha="" }
-            END { if (fn!="") print fn, sz, sha }')"
+        done < <(parse_packages_index "${packages_file}")
+        rm -f "${packages_file}"
     done
 
     # HEAL: a verbatim suite whose published pool no longer matches its published
@@ -410,6 +491,7 @@ for other_suite in "${OTHER_SUITES[@]}"; do
     if [[ "${IS_VERBATIM["${other_suite}"]}" == "true" && "${verbatim_mismatch}" == "true" ]]; then
         echo ">>> HEAL: '${other_suite}' signed index disagrees with the live pool — regenerating from pool (re-export, not verbatim)"
         IS_VERBATIM["${other_suite}"]=false
+        HEALED_SUITES+=("${other_suite}")
         # Drop the stale verbatim dists/ tree so reprepro can regenerate it.
         rm -rf "${OUTPUT_DIR}/dists/${other_suite}"
         # Feed the already-downloaded pool .debs into the re-export input dir.
@@ -474,8 +556,70 @@ canonicalize_debs_against_pool() {
     done
 }
 
+# The same rule applies to the target suite itself. A rebuild of a package
+# whose name, version and architecture the live target index already lists
+# (an unchanged component in an otherwise new build) would replace published
+# bytes at the same pool path, and every client or CDN edge still holding the
+# old index would see a size mismatch. So the published .deb is downloaded
+# and adopted when it matches the live index; the fresh rebuild is dropped.
+# A live file that is absent or disagrees with its own index cannot be
+# adopted; the fresh build is kept and logged. A failed download stops the
+# publish.
+canonicalize_debs_against_live_target() {
+    local lstage="$1"
+    local ltarget larch lpackages lfilename lsize lsha lbase ldeb lrc lstaged_sha lfetched lwork
+    lwork="$(mktemp -d)"
+    for ltarget in "${PUBLISH_TARGETS[@]}"; do
+        for larch in "${VALID_ARCHES[@]}"; do
+            lpackages="${lwork}/Packages"
+            lrc=0
+            fetch_url "${REPO_URL}/dists/${ltarget}/main/binary-${larch}/Packages" "${lpackages}" || lrc=$?
+            if [[ "${lrc}" -eq 4 ]]; then
+                continue
+            elif [[ "${lrc}" -ne 0 ]]; then
+                echo "ERROR: could not download the live ${ltarget}/binary-${larch} index" >&2
+                rm -rf "${lwork}"
+                return 1
+            fi
+            while read -r lfilename lsize lsha; do
+                [[ -n "${lfilename}" && -n "${lsize}" && -n "${lsha}" ]] || continue
+                lbase="$(basename "${lfilename}")"
+                ldeb="${lstage}/${lbase}"
+                [[ -f "${ldeb}" ]] || continue
+                lstaged_sha="$(sha256sum "${ldeb}" | awk '{print $1}')"
+                [[ "${lstaged_sha}" == "${lsha}" ]] && continue
+                lfetched="${lwork}/${lbase}"
+                lrc=0
+                fetch_url "${REPO_URL}/${lfilename}" "${lfetched}" || lrc=$?
+                if [[ "${lrc}" -eq 4 ]]; then
+                    echo "  WARNING: live ${lfilename} is listed by ${ltarget} but missing; keeping the fresh build" >&2
+                    continue
+                elif [[ "${lrc}" -ne 0 ]]; then
+                    echo "ERROR: could not download the published ${lfilename}" >&2
+                    rm -rf "${lwork}"
+                    return 1
+                fi
+                if [[ "$(wc -c < "${lfetched}" | tr -d '[:space:]')" == "${lsize}" \
+                    && "$(sha256sum "${lfetched}" | awk '{print $1}')" == "${lsha}" ]]; then
+                    echo "  pool-immutable: adopting the published ${lbase} from live ${ltarget} (fresh rebuild discarded)"
+                    cp -f "${lfetched}" "${ldeb}"
+                else
+                    echo "  WARNING: live ${lfilename} does not match the ${ltarget} index; keeping the fresh build" >&2
+                fi
+                rm -f "${lfetched}"
+            done < <(parse_packages_index "${lpackages}")
+        done
+    done
+    rm -rf "${lwork}"
+    return 0
+}
+
 STAGED_DEB_DIR="$(mktemp -d)"
 cp "${DEB_DIR}"/*.deb "${STAGED_DEB_DIR}/"
+if ! canonicalize_debs_against_live_target "${STAGED_DEB_DIR}"; then
+    echo "ERROR: could not compare the fresh packages with the live target suite; refusing to publish." >&2
+    exit 1
+fi
 canonicalize_debs_against_pool "${STAGED_DEB_DIR}" "${OUTPUT_DIR}"
 
 # repo_manage.sh resolves the same (track, distro) into PUBLISH_TARGETS and
@@ -561,10 +705,101 @@ for suite in "${ALL_SUITES[@]}"; do
     fi
     if [[ -f "${OUTPUT_DIR}/dists/${suite}/Release" ]]; then
         echo "  by-hash + re-sign: ${suite}"
-        add_byhash_and_resign "${suite}" "${OUTPUT_DIR}"
+        if ! add_byhash_and_resign "${suite}" "${OUTPUT_DIR}"; then
+            echo "ERROR: by-hash or signing failed for '${suite}'. Refusing to publish." >&2
+            exit 1
+        fi
     fi
 done
 echo ">>> Acquire-By-Hash post-processing complete"
+echo ""
+
+# ============================================
+# Step 4b1: Keep the previous by-hash generation of regenerated suites
+# ============================================
+# A client (or CDN edge) that fetched the old Release just before this deploy
+# asks for the old indexes by hash. A regenerated suite only has by-hash
+# copies of its new indexes, so those requests would 404 and `apt update`
+# would fail until the client retried. For every suite this pass regenerated
+# (the targets and any healed suite), copy the live suite's current indexes
+# into by-hash/ next to the new ones. Only that one previous generation is
+# kept; older ones are dropped, so by-hash/ does not grow without limit.
+#
+# carry_previous_byhash <suite> -> 0 on success (including "nothing live"),
+# 1 when a download failed.
+carry_previous_byhash() {
+    local lsuite="$1"
+    local ldist="${OUTPUT_DIR}/dists/${lsuite}"
+    local lbase="${REPO_URL}/dists/${lsuite}"
+    local lwork lrc lhash lrelpath ldir lfile lsha512 lrh lcarried=0
+    [[ -f "${ldist}/Release" ]] || return 0
+    lwork="$(mktemp -d)"
+
+    lrc=0
+    fetch_url "${lbase}/Release" "${lwork}/Release" || lrc=$?
+    if [[ "${lrc}" -eq 4 ]]; then
+        rm -rf "${lwork}"
+        return 0
+    elif [[ "${lrc}" -ne 0 ]]; then
+        echo "ERROR: ${lsuite}: could not download the live Release" >&2
+        rm -rf "${lwork}"
+        return 1
+    fi
+
+    while read -r lhash lrelpath; do
+        [[ -n "${lrelpath}" ]] || continue
+        ldir="$(dirname "${lrelpath}")"
+        if [[ -f "${ldist}/${ldir}/by-hash/SHA256/${lhash}" ]]; then
+            continue   # unchanged index, already present
+        fi
+        lfile="${lwork}/file"
+        # Prefer the live by-hash copy: it is exactly this generation even if
+        # the canonical file has moved on.
+        lrc=0
+        fetch_url "${lbase}/${ldir}/by-hash/SHA256/${lhash}" "${lfile}" || lrc=$?
+        if [[ "${lrc}" -eq 4 ]]; then
+            lrc=0
+            fetch_url "${lbase}/${lrelpath}" "${lfile}" || lrc=$?
+        fi
+        if [[ "${lrc}" -eq 4 ]]; then
+            continue
+        elif [[ "${lrc}" -ne 0 ]]; then
+            echo "ERROR: ${lsuite}: could not download the live ${lrelpath}" >&2
+            rm -rf "${lwork}"
+            return 1
+        fi
+        if [[ "$(sha256sum "${lfile}" | awk '{print $1}')" != "${lhash}" ]]; then
+            echo "  WARNING: ${lsuite}: live ${lrelpath} does not match its Release; not keeping it" >&2
+            continue
+        fi
+        mkdir -p "${ldist}/${ldir}/by-hash/SHA256"
+        cp -f "${lfile}" "${ldist}/${ldir}/by-hash/SHA256/${lhash}"
+        lsha512="$(awk -v p="${lrelpath}" '$0=="SHA512:"{f=1;next} /^[A-Za-z0-9-]+:/{f=0} f && $3==p {print $1; exit}' "${lwork}/Release")"
+        if [[ -n "${lsha512}" ]] && [[ "$(sha512sum "${lfile}" | awk '{print $1}')" == "${lsha512}" ]]; then
+            mkdir -p "${ldist}/${ldir}/by-hash/SHA512"
+            cp -f "${lfile}" "${ldist}/${ldir}/by-hash/SHA512/${lsha512}"
+        fi
+        lcarried=$((lcarried + 1))
+    done < <(awk '$0=="SHA256:"{f=1;next} /^[A-Za-z0-9-]+:/{f=0} f{print $1, $3}' "${lwork}/Release")
+
+    # The previous Release itself, by hash, next to the new one.
+    for lrh in SHA256 SHA512; do
+        lhash="$("${lrh,,}sum" "${lwork}/Release" | awk '{print $1}')"
+        mkdir -p "${ldist}/by-hash/${lrh}"
+        cp -f "${lwork}/Release" "${ldist}/by-hash/${lrh}/${lhash}"
+    done
+    echo "  kept previous by-hash generation of ${lsuite} (${lcarried} changed index files)"
+    rm -rf "${lwork}"
+    return 0
+}
+
+echo ">>> Keeping the previous by-hash generation of regenerated suites..."
+for suite in "${PUBLISH_TARGETS[@]}" "${HEALED_SUITES[@]}"; do
+    if ! carry_previous_byhash "${suite}"; then
+        echo "ERROR: could not carry the previous by-hash generation of '${suite}'. Refusing to publish." >&2
+        exit 1
+    fi
+done
 echo ""
 
 # ============================================
@@ -591,8 +826,13 @@ done
 # SHA256 that no longer matches the .deb in pool/). It runs over the FULL
 # accumulating repo-output after this pass's exports + re-signs, so a mismatch
 # aborts ci_publish (set -e) before anything is uploaded to Pages.
-echo ">>> Verifying repository integrity (index <-> pool, Release <-> index)..."
-"${toolpath}/scripts/verify_repo_integrity.sh" "${OUTPUT_DIR}"
+# --keyring also checks every suite's signatures against the public key
+# clients install (podman-debian.gpg, written by repo_manage.sh), so a
+# signing problem fails here and not on users' machines. REPO_KEYRING
+# overrides it (the tests sign with a throwaway key).
+REPO_KEYRING="${REPO_KEYRING:-${OUTPUT_DIR}/podman-debian.gpg}"
+echo ">>> Verifying repository integrity (signatures, index <-> pool, Release <-> index)..."
+"${toolpath}/scripts/verify_repo_integrity.sh" --keyring "${REPO_KEYRING}" "${OUTPUT_DIR}"
 echo ""
 
 # Clean up all temp dirs

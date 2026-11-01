@@ -724,6 +724,45 @@ run_logged() {
 }
 
 # ============================================
+# Compiler caches
+# ============================================
+
+# enable_rust_compiler_cache -> when SCCACHE_ENABLED=true, export
+# RUSTC_WRAPPER=sccache for the cargo build that follows. If sccache is not
+# installed, warn and build uncached, or fail when CACHE_STRICT=true.
+enable_rust_compiler_cache() {
+    [[ "${SCCACHE_ENABLED:-false}" == "true" ]] || return 0
+    if command -v sccache &>/dev/null; then
+        export RUSTC_WRAPPER=sccache
+        echo "  sccache enabled for Rust compilation (${SCCACHE_DIR:-default dir}, max ${SCCACHE_CACHE_SIZE:-default})"
+        return 0
+    fi
+    if [[ "${CACHE_STRICT:-false}" == "true" ]]; then
+        echo "ERROR: SCCACHE_ENABLED=true and CACHE_STRICT=true, but sccache is not installed" >&2
+        return 1
+    fi
+    echo "  WARNING: SCCACHE_ENABLED=true but sccache is not installed; building without it" >&2
+    return 0
+}
+
+# enable_c_compiler_cache -> when CCACHE_ENABLED=true, export CC="ccache gcc"
+# for the C build that follows. Same missing-tool rules as above.
+enable_c_compiler_cache() {
+    [[ "${CCACHE_ENABLED:-false}" == "true" ]] || return 0
+    if command -v ccache &>/dev/null; then
+        export CC="ccache gcc"
+        echo "  ccache enabled for C compilation (${CCACHE_DIR:-default dir}, max ${CCACHE_MAXSIZE:-default})"
+        return 0
+    fi
+    if [[ "${CACHE_STRICT:-false}" == "true" ]]; then
+        echo "ERROR: CCACHE_ENABLED=true and CACHE_STRICT=true, but ccache is not installed" >&2
+        return 1
+    fi
+    echo "  WARNING: CCACHE_ENABLED=true but ccache is not installed; building without it" >&2
+    return 0
+}
+
+# ============================================
 # Load Configuration (MUST be after all function definitions)
 # ============================================
 # This sources config.sh which calls get_required_go_version(), get_required_rust_version(), etc.

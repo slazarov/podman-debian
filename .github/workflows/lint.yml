@@ -1,8 +1,8 @@
 name: lint
 
-# Fast quality gate on every push and PR. The heavier reprepro/gpg integration
-# harnesses run in the publish job of build-packages.yml; here we run ShellCheck,
-# an informational shfmt diff, and the portable bash unit tests.
+# Quality gate on every push and PR: ShellCheck, an informational shfmt diff,
+# and every bash test, including the reprepro/gpg integration harnesses (the
+# publish job of build-packages.yml runs those again before it deploys).
 on:
   push:
     branches: [main]
@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       # Blocking, but scoped to real breakage (severity=error) so it is green
       # today; tighten to `warning` then default as existing warnings are fixed.
       # Reads .shellcheckrc from the repo root (external-sources, SC1091 off).
@@ -30,6 +32,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       # Not blocking yet — surfaces formatting drift against the house style
       # (.editorconfig / .pre-commit-config.yaml). Promote to blocking after a
       # one-time `shfmt -w` normalization pass.
@@ -42,7 +46,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The integration tests need reprepro, gpg and dpkg-deb. Without them
+      # they print SKIP and pass, which would hide a broken publish path, so
+      # install them and set REQUIRE_INTEGRATION_DEPS=1: a missing tool then
+      # fails the test instead.
+      - name: Install integration test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends reprepro gnupg gpgv dpkg-dev python3-yaml
       - name: Run tests/*.sh
+        env:
+          REQUIRE_INTEGRATION_DEPS: '1'
         run: |
           fail=0
           for t in tests/test_*.sh; do
@@ -59,6 +75,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0   # full history so the scan covers past commits
+          persist-credentials: false
       # Informational until the first run confirms history is clean — the repo's
       # early experimental phase could surface findings. Once green, drop
       # continue-on-error to make it blocking (and add a .gitleaksignore for any

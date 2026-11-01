@@ -47,10 +47,7 @@ if [[ -f "Cargo.toml" ]]; then
     step_start "Configuring Cargo optimization"
     export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$NPROC}"
 
-    if [[ "${SCCACHE_ENABLED:-false}" == "true" ]] && command -v sccache &>/dev/null; then
-        export RUSTC_WRAPPER=sccache
-        echo "  sccache enabled for Rust compilation"
-    fi
+    enable_rust_compiler_cache
 
     if [[ "${MOLD_ENABLED:-false}" == "true" ]] && command -v mold &>/dev/null; then
         mkdir -p .cargo
@@ -76,10 +73,7 @@ TOML
 else
     # C/autotools build (fuse-overlayfs v1.x)
     step_start "Configuring ccache"
-    if [[ "${CCACHE_ENABLED:-false}" == "true" ]] && command -v ccache &>/dev/null; then
-        export CC="ccache gcc"
-        echo "  ccache enabled for C compilation"
-    fi
+    enable_c_compiler_cache
     step_done
 
     step_start "Running autogen"

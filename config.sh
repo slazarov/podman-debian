@@ -151,7 +151,7 @@ export SHALLOW_CLONE="${SHALLOW_CLONE:-true}"
 # Parallel job count for cargo builds (defaults to NPROC)
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$NPROC}"
 
-# Optional: Enable sccache for Rust build caching (50-90% rebuild speedup)
+# Optional: Enable sccache for Rust build caching
 # Set to "true" to enable: export SCCACHE_ENABLED=true
 export SCCACHE_ENABLED="${SCCACHE_ENABLED:-false}"
 
@@ -159,11 +159,29 @@ export SCCACHE_ENABLED="${SCCACHE_ENABLED:-false}"
 export SCCACHE_VERSION="${SCCACHE_VERSION:-0.14.0}"
 export SCCACHE_DIR="${SCCACHE_DIR:-/var/cache/sccache}"
 
+# Upper bound for the sccache directory; sccache evicts the oldest entries
+# beyond it.
+export SCCACHE_CACHE_SIZE="${SCCACHE_CACHE_SIZE:-2G}"
+
+# SHA256 of the sccache release tarball install_rust.sh downloads. The
+# default is pinned for the default SCCACHE_VERSION. For any other version,
+# set SCCACHE_SHA256 yourself, or leave it empty and install_rust.sh checks
+# the tarball against the .sha256 file published with the release.
+if [[ -z "${SCCACHE_SHA256:-}" && "${SCCACHE_VERSION}" == "0.14.0" ]]; then
+    SCCACHE_SHA256="8424b38cda4ecce616a1557d81328f3d7c96503a171eab79942fad618b42af44"
+fi
+export SCCACHE_SHA256="${SCCACHE_SHA256:-}"
+
+# Fail the build when a cache is enabled but its tool (sccache, ccache) is
+# missing, instead of building uncached with a warning. CI sets it to true so
+# a broken cache setup shows up as a failure, not as a slow build.
+export CACHE_STRICT="${CACHE_STRICT:-false}"
+
 # ============================================
 # C/C++ Build Optimization
 # ============================================
 
-# Optional: Enable ccache for C build caching (30x faster warm-cache rebuilds)
+# Optional: Enable ccache for C build caching
 # Set to "true" to enable: export CCACHE_ENABLED=true
 export CCACHE_ENABLED="${CCACHE_ENABLED:-false}"
 

@@ -103,19 +103,23 @@ The nightly marker is `~~git`, with two tildes. dpkg compares `~git` and `~deb` 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CARGO_BUILD_JOBS` | `$NPROC` | Parallel cargo jobs. |
-| `SCCACHE_ENABLED` | `false` | Cache Rust builds with sccache. |
+| `SCCACHE_ENABLED` | `false` | Cache Rust builds with sccache. CI sets it to `true`. |
 | `SCCACHE_VERSION` | `0.14.0` | sccache version, used when enabled. |
+| `SCCACHE_SHA256` | pinned for `0.14.0` | SHA256 of the sccache release tarball. `install_rust.sh` refuses a download that does not match. For another `SCCACHE_VERSION`, set it yourself, or leave it empty to check against the `.sha256` file published with the release. |
 | `SCCACHE_DIR` | `/var/cache/sccache` | sccache cache directory. |
+| `SCCACHE_CACHE_SIZE` | `2G` | Maximum sccache size; the oldest entries are evicted beyond it. CI uses `1G`. |
 | `MOLD_ENABLED` | `false` | Link Rust binaries with mold. Installs `mold` and `clang`. |
 
 ### C
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CCACHE_ENABLED` | `false` | Cache C builds with ccache. Installs `ccache`. |
+| `CCACHE_ENABLED` | `false` | Cache C builds (crun, conmon, catatonit, pasta, fuse-overlayfs 1.x) with ccache. Installs `ccache`. CI sets it to `true`. |
 | `CCACHE_DIR` | `/var/cache/ccache` | ccache cache directory. |
-| `CCACHE_MAXSIZE` | `2G` | Maximum cache size. |
+| `CCACHE_MAXSIZE` | `2G` | Maximum cache size. CI uses `500M`. |
 | `CCACHE_COMPILERCHECK` | `content` | Hash the compiler binary, so a GCC upgrade invalidates the cache. |
+
+`CACHE_STRICT` (default `false`) applies to both caches. With `false`, an enabled cache whose tool is missing prints a warning and the build runs uncached. With `true`, the build fails instead. CI sets `true`, so a broken cache setup shows up as a failure rather than as a slow build.
 
 ### Go
 
@@ -134,8 +138,16 @@ The nightly marker is `~~git`, with two tildes. dpkg compares `~git` and `~deb` 
 | `VERSION` | computed | Package version substituted into the nFPM YAML. Set per component by `package_all.sh`. |
 | `GPG_PRIVATE_KEY` | none | Key imported by `repo_manage.sh` before signing. Accepts a base64-encoded key (`gpg --export-secret-keys --armor KEY_ID \| base64 -w0`) or a raw ASCII-armored key. When unset, a secret key must already be in the keyring. |
 | `REPO_URL_DEFAULT` | `https://slazarov.github.io/podman-debian` | Live repository read by `check_republish_needed.sh` when no URL argument is given. |
+| `REPO_KEYRING` | `<output-dir>/podman-debian.gpg` | Public key `ci_publish.sh` checks every suite's signatures against at the end of each pass. The tests point it at their throwaway key. |
+| `FETCH_ATTEMPTS` | `4` | How many times `fetch_url` tries a download that fails with a network error, a cut-off body or HTTP 408, 429 or 5xx. |
+| `FETCH_RETRY_DELAY` | `2` | Seconds between tries, multiplied by the attempt number. |
+| `FETCH_MAX_TIME` | `300` | Time limit for one download, in seconds. |
+| `PROPAGATION_ATTEMPTS` | `30` | How many times the publish job polls each suite's live `InRelease` after a deploy. |
+| `PROPAGATION_DELAY` | `10` | Seconds between those polls. |
 
 `repo_manage.sh` takes the output directory as its fourth argument (default `${toolpath}/repo-output`). `package_all.sh` always writes to `${toolpath}/output`.
+
+`check_republish_needed.sh <stable|v5> [repo-url] [resolved-env-file]` takes an optional third argument: the output of `resolve_versions.sh`. CI passes the one resolve-track produced, so the resolver runs once per run. The file must contain only `export NAME="value"` lines for the known `*_TAG` names (and `PROTOC_VERSION`/`PROTOC_TAG`), each component exactly once; anything else fails the guard. Without the argument, the guard runs the resolver itself.
 
 ### Smoke tests
 
@@ -145,7 +157,9 @@ The nightly marker is `~~git`, with two tildes. dpkg compares `~git` and `~deb` 
 | `SMOKE_IMAGE` | the label's `DISTRO_IMAGES` entry | Base image override. |
 | `OUTPUT_DIR` | `${toolpath}/output` | Where `smoke_install.sh` looks for `.deb` files. |
 | `TRACK` | `nightly` | Track `smoke_repo_install.sh` installs from. |
-| `LIVE_REPO_URL` | none | Published repository for the upgrade scenario. Unset skips that scenario. Must be a plain `https://` URL. |
+| `LIVE_REPO_URL` | none | Published repository for the upgrade scenario. Unset skips that scenario. Must be a plain `https://` URL. The script probes `dists/<suite>/InRelease` from the host first: HTTP 404 skips the scenario (the suite is not published yet), while a network or server error fails the smoke test. |
+
+`smoke_repo_install.sh` reads the assembled repository with apt's `Signed-By` pointing at the repository's own `podman-debian.gpg`, so apt checks the signatures as it does for users. After the upgrade scenario it checks that every package of the assembled suite that is installed, and `podman-suite` itself, is `install ok installed` at the assembled version.
 
 ## Configuration files
 

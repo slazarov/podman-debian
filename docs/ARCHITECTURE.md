@@ -115,13 +115,25 @@ The suffix also sorts below Debian's own package of the same upstream version (f
 
 ## CI and publishing
 
-`.github/workflows/build-packages.yml` runs on three daily schedules, `30 4` (nightly), `30 5` (stable) and `30 6` (v5) UTC, and on `workflow_dispatch` with a `build_track` choice and a `force_rebuild` flag. Jobs share the concurrency group `pages`.
+`.github/workflows/build-packages.yml` runs on three daily schedules, `30 4` (nightly), `30 5` (stable) and `30 6` (v5) UTC, and on `workflow_dispatch` with a `build_track` choice and a `force_rebuild` flag.
 
-- `resolve-track` maps the firing cron or dispatch input to a track and runs `scripts/ci_matrix.sh` to produce the build matrix as JSON, one cell per entry in `VALID_DISTROS`.
-- `check-changes` runs only on the nightly cron. It compares upstream HEAD commits with the last run and skips the build when nothing changed.
-- `check-republish` runs for stable and v5. `scripts/check_republish_needed.sh` resolves the versions a build would produce and compares them with the `Packages` index of every `{track}-{label}` suite in the live repository. It skips the build only when every component, pasta included, matches. Any fetch or resolve failure means build.
-- `build` is a single matrix job with `fail-fast: false`. Each cell runs in its distro's Debian container on a GitHub-hosted amd64 runner. The steps bootstrap `sudo`, `git`, `curl` and `ca-certificates`, check version ordering with `verify_versions.sh`, run `setup.sh` with `DISTRO=<label>` and `SKIP_FUSE_CHECK=true` (the job container cannot open `/dev/fuse`), package with the same `DISTRO`, and check the detected library dependencies with `verify_depends.sh`. The Go cache key and the artifact name (`debs-<label>`) carry the distro.
-- `publish` runs on `main` when at least one build cell succeeded. It runs the doc, landing-page and repo-assembly tests, downloads each artifact into its own directory (`artifacts/debs-<label>/`), and calls `ci_publish.sh` once per distro in `VALID_DISTROS` order into one `repo-output/`. A distro with no artifact is skipped; if no distro published, the job fails before deploying. It then runs `verify_repo_integrity.sh`, runs `smoke_repo_install.sh` for each distro whose suite exists in `repo-output/`, and deploys to Pages in one step.
+Runs queue instead of replacing each other. Each track has its own workflow concurrency group (`build-packages-<track>`) with `queue: max`, so a second run of a track waits for the first, and no pending run is cancelled. GitHub's default for a group keeps only one pending run and cancels the rest, which is how a scheduled run could silently disappear. Different tracks build in parallel. The `publish` job has its own group, `pages-deploy`, also with `queue: max`, so only one run at a time assembles and deploys the repository.
+
+The workflow grants only `contents: read`. The `publish` job adds `pages: write` and `id-token: write` for the deploy and `actions: read` to list this run's jobs. Every checkout sets `persist-credentials: false`.
+
+- `resolve-track` maps the firing cron or dispatch input to a track and runs `scripts/ci_matrix.sh` to produce the build matrix as JSON, one cell per entry in `VALID_DISTROS`. For stable and v5 it also runs `scripts/resolve_versions.sh`, once per run, and passes the output (`resolved_env`) to the guard and every build cell. Each consumer checks it with `validate_resolved_env` before use. A hold (exit code 3: upstream is reachable, but no release has passed its soak period yet) sets `hold=true`: nothing is built or published and the run succeeds, even with `force_rebuild`. Any other resolver failure fails the run.
+- `check-changes` runs only on the nightly cron. It restores the nightly checkpoint (restore only, it never saves) and compares each component's upstream HEAD with the commit last deployed for each distro. It skips the build only when every distro is current. A missing checkpoint, or an upstream repository that cannot be read, also leads to a build.
+- `check-republish` runs for stable and v5 unless the resolver held. `scripts/check_republish_needed.sh` takes the resolved environment and compares it with the `Packages` index of every `{track}-{label}` suite in the live repository. It skips the build only when every component, pasta and the `podman-suite` meta-package included, matches on every distro. Any failed download leads to a build; an invalid resolved environment fails the job.
+- `build` is a single matrix job with `fail-fast: false`, one job per distro named `build-<label>`. Each cell runs in its distro's Debian container on a GitHub-hosted amd64 runner. The steps bootstrap `sudo`, `git`, `curl` and `ca-certificates`, check version ordering with `verify_versions.sh`, turn the track into `KEY=VALUE` pairs for `setup.sh`, restore the Go and compiler caches, run `setup.sh` with `DISTRO=<label>` and `SKIP_FUSE_CHECK=true` (the job container cannot open `/dev/fuse`), check that the compiler caches were used, package with the same `DISTRO`, and check the detected library dependencies with `verify_depends.sh`. On nightly, each cell records the upstream commits it built (`nightly-revs-<label>`). The cache keys and artifact names (`debs-<label>`) carry the distro.
+- `publish` runs on `main` when at least one build cell succeeded. It runs the doc, landing-page and repo-assembly tests, reads each build cell's conclusion from the GitHub API, and downloads each artifact into its own directory (`artifacts/debs-<label>/`). It publishes exactly the distros whose cell succeeded; if a successful cell's artifact is missing, the job fails instead of publishing less. It calls `ci_publish.sh` once per selected distro in `VALID_DISTROS` order into one `repo-output/`, runs `verify_repo_integrity.sh --keyring` over the result, runs `smoke_repo_install.sh` for each selected distro, and deploys to Pages in one step. It then waits until each published suite's live `InRelease` matches the deployed one. On nightly, only after that, it merges the selected distros' revisions into the checkpoint and saves it.
+
+### Nightly checkpoint
+
+The checkpoint is a cache entry (`nightly-rev-v2-*`) holding one line per distro and component: `<distro> <component> <commit>`. Build cells record what they compiled; the publish job folds in only the distros it deployed, and only after the deploy reached the live site. If the trixie cell fails, bookworm's commits are checkpointed and trixie keeps its old entries, so the next nightly cron rebuilds trixie. The helpers live in `scripts/ci_helpers.sh` (`nightly_record_revisions`, `nightly_detect_changes`, `nightly_merge_revisions`).
+
+### Compiler caches
+
+Go module and build caches are kept per distro and track, as before. Rust (sccache) and C (ccache) output is cached too, under one key per distro, architecture, track, Rust version and sccache version: `cc-v1-<label>-amd64-<track>-rust<version>-sccache<version>-<run id>`, restored by prefix from the latest matching run. The key only picks a starting point. sccache hashes the `rustc` binary and ccache hashes the compiler (`compilercheck=content`), so a toolchain change behind the same key misses the cache instead of reusing a wrong object. CI caps sccache at 1 GB and ccache at 500 MB, and sets `CACHE_STRICT=true`, which fails the build when an enabled wrapper is missing. After the build, `compiler_cache_report` prints both tools' statistics and fails the cell if an enabled cache saw no compile requests. The caches hold compiler output only, never signing keys or repository state.
 
 To reproduce the publish locally:
 
@@ -139,22 +151,26 @@ Both scripts use their distro argument as the `DISTRO` override, so they do not 
 `resolve_publish_targets <track> <distro>` in `config.sh` returns the single suite a build publishes to, `<track>-<distro>`. There are no bare track suites. `ci_publish.sh` treats every other suite in `ALL_SUITES` as an untouched suite:
 
 - A suite an earlier pass already wrote into the output directory is kept in place. Without this, the trixie pass would re-mirror the live, older `stable-bookworm` over the one the bookworm pass just built.
-- A suite with a live tree is mirrored verbatim: the signed `Release`, `InRelease`, `Release.gpg`, the indexes it lists (checked against the signed hashes) and the pool files they reference. Its signature and `Date` stay byte-identical, which keeps the Acquire-By-Hash window on the Pages CDN closed.
+- A suite with a live tree is mirrored verbatim: the signed `Release`, `InRelease`, `Release.gpg`, the indexes it lists (checked against the signed hashes) and the pool files they reference. Its signature and `Date` stay byte-identical, which keeps the Acquire-By-Hash window on GitHub Pages' content delivery network closed.
 - A suite with no live tree (first publish) stays empty.
 
 The target suite is then built from the fresh `.deb` files, and Acquire-By-Hash plus re-signing is applied to every suite that was not served verbatim.
+
+Every download from the live repository goes through `fetch_url` (`scripts/ci_helpers.sh`), which retries network and TLS errors, cut-off transfers and HTTP 408, 429 and 5xx, and tells "absent" (HTTP 404 or 410) apart from "failed". Only "absent" means a suite or file is not published. A download that still fails after the retries stops the publish, so a brief outage of the content delivery network in front of GitHub Pages can never make a suite look empty or drop a package from it. Each request carries a throwaway query string and a `no-cache` header, so a cache in front of GitHub Pages does not answer with a copy from before the last deploy.
+
+A regenerated suite (the target, or a healed one) keeps the previous generation of its indexes under `by-hash/`: `ci_publish.sh` copies the live suite's current indexes and `Release` in next to the new ones. A client that read the old `Release` just before the deploy can still fetch the indexes it names. Only that one previous generation is kept, so `by-hash/` does not grow over time.
 
 ### Pool immutability
 
 reprepro keeps one `pool/` for all suites, keyed by source, version and architecture. A component version shipped by two tracks (for example the same skopeo in stable and v5) has a single pool file, and every suite's signed index checksums that file. Two mechanisms keep the pool and the indexes in agreement, and one checks it:
 
-- Prevent: before building the target suite, `ci_publish.sh` adopts any already-published pool file with the same name instead of overwriting it with a fresh, non-reproducible rebuild.
-- Heal: a suite is only served verbatim if every pool file it references still matches its signed `Size` and `SHA256`. Otherwise it is re-exported from the real pool bytes and re-signed.
-- Verify: `scripts/verify_repo_integrity.sh` runs at the end of every `ci_publish.sh` pass and again before the Pages upload. It fails the publish if any `Release`, index or pool checksum disagrees.
+- Prevent: before building the target suite, `ci_publish.sh` adopts any already-published pool file with the same name instead of overwriting it with a fresh, non-reproducible rebuild. It checks two places: the pool assembled so far (the other suites), and the live index of the target suite itself. A package whose name, version and architecture the live target index already lists (an unchanged component in a new build) is downloaded and its published bytes are used; the fresh rebuild is dropped.
+- Heal: a suite is only served verbatim if every pool file it references still matches its signed `Size` and `SHA256`. Otherwise it is re-exported from the real pool bytes and re-signed. This covers only complete downloads whose bytes disagree with the index. A pool file the index names but the live site does not have (HTTP 404), or a download that fails, stops the publish instead: regenerating the suite without the file would silently drop a package.
+- Verify: `scripts/verify_repo_integrity.sh` runs at the end of every `ci_publish.sh` pass and again before the Pages upload. It fails the publish if any `Release`, index or pool checksum disagrees, if a `Release` lacks `Suite`, `Codename`, its `SHA256` section or a `Packages` entry for a declared architecture, or if a `Packages` stanza lacks `Size` or `SHA256`. With `--keyring` it also checks both signatures of every suite with `gpgv` against the published key, and that `InRelease` signs exactly the text of `Release`.
 
 ### Signing
 
-`GPG_PRIVATE_KEY` is imported with ultimate ownertrust and reprepro signs each suite. `repo_byhash.sh` re-signs after adding `Acquire-By-Hash` to `Release`, since editing `Release` invalidates reprepro's signature. The public key is published as `podman-debian.gpg`, copied from `packaging/repo/pubkey.gpg` when that file exists and exported from the signing keyring otherwise.
+`GPG_PRIVATE_KEY` is imported with ultimate ownertrust and reprepro signs each suite. `repo_byhash.sh` re-signs after adding `Acquire-By-Hash` to `Release`, since editing `Release` invalidates reprepro's signature. It checks every step and returns non-zero if either signature cannot be written or does not verify afterwards; `ci_publish.sh` stops on that. The public key is published as `podman-debian.gpg`, copied from `packaging/repo/pubkey.gpg` when that file exists and exported from the signing keyring otherwise. The integrity gate verifies every suite against that file, and the smoke test points apt's `Signed-By` at it, so a suite signed with any other key fails before the deploy.
 
 ## Key functions
 
@@ -167,6 +183,8 @@ reprepro keeps one `pool/` for all suites, keyed by source, version and architec
 - `detect_runtime_depends` (`functions.sh`): system-library `Depends` from direct `DT_NEEDED` entries.
 - `extract_version`, `extract_version_nightly`, `resolve_tag_from_repo` (`scripts/package_all.sh`): package versions from tags, from source files for nightly, or from the checked-out tag when a tag variable is empty.
 - `generate_index_html` (`scripts/index_html.sh`): the landing page, with setup snippets and package tables generated from the distro table.
+- `enable_rust_compiler_cache`, `enable_c_compiler_cache` (`functions.sh`): set `RUSTC_WRAPPER` or `CC` for the build scripts when the cache is enabled, honoring `CACHE_STRICT`.
+- `fetch_url`, `validate_resolved_env`, `published_distros`, `wait_for_propagation`, `compiler_cache_report` and the `nightly_*` checkpoint helpers (`scripts/ci_helpers.sh`): shared CI logic, sourceable without `config.sh`.
 
 ## Directory layout
 
@@ -193,6 +211,7 @@ reprepro keeps one `pool/` for all suites, keyed by source, version and architec
 │   ├── repo_byhash.sh            # Acquire-By-Hash and re-signing
 │   ├── index_html.sh             # Landing page generator
 │   ├── ci_matrix.sh              # CI build matrix from the distro table
+│   ├── ci_helpers.sh             # Shared CI helpers (fetches, checkpoint, cell selection)
 │   ├── check_republish_needed.sh # Skips stable/v5 builds when nothing changed
 │   ├── verify_depends.sh         # Detected Depends against per-distro baselines
 │   ├── verify_versions.sh        # Version-suffix ordering
@@ -203,7 +222,7 @@ reprepro keeps one `pool/` for all suites, keyed by source, version and architec
 ├── packaging/
 │   ├── nfpm/               # One nFPM definition per package
 │   └── repo/               # reprepro configuration and public key
-├── tests/                  # Bash unit and integration tests
+├── tests/                  # Bash unit and integration tests (tests/lib: shared test helpers)
 ├── docs/                   # Documentation
 ├── build/                  # Cloned sources and downloaded tools (not tracked)
 ├── log/                    # Build logs (not tracked)

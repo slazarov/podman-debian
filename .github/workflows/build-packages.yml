@@ -3,7 +3,7 @@ name: Build and Publish Packages
 on:
   schedule:
     # One cron per auto-updating track; the firing cron selects the track (see the
-    # resolve-track job). Staggered so the "pages" concurrency group serializes them.
+    # resolve-track job).
     - cron: '30 4 * * *'  # 04:30 UTC — nightly (upstream HEAD)
     - cron: '30 5 * * *'  # 05:30 UTC — stable  (Podman 6.x, series-cap + soak)
     - cron: '30 6 * * *'  # 06:30 UTC — v5      (Podman 5.x maintenance, series-cap + soak)
@@ -19,34 +19,53 @@ on:
           - nightly
         default: stable
       force_rebuild:
-        description: 'Force a stable/v5 rebuild even when no pinned version changed (bypasses the republish guard). Use to republish after a packaging-only change. Ignored on nightly (already unguarded on dispatch).'
+        description: 'Force a stable/v5 rebuild even when every package is already published at the resolved version (bypasses the republish guard). Use it to republish after a packaging-only change. It does not override a resolver hold (no soaked release yet): with nothing to resolve there is nothing to build. Ignored on nightly, which is never guarded on dispatch.'
         required: false
         type: boolean
         default: false
 
+# Least privilege: every job can read the repository and nothing else. The
+# publish job adds what the Pages deploy needs (and read access to this run's
+# job list).
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
+# One queue per track. A new run of a track waits for the previous run of the
+# same track instead of replacing it: GitHub's default (queue: single) keeps
+# only one pending run per group and cancels the others, which dropped
+# scheduled runs. Different tracks build in parallel; the publish job has its
+# own group (pages-deploy) so only one run assembles and deploys at a time.
 concurrency:
-  group: "pages"
+  group: build-packages-${{ github.event_name == 'workflow_dispatch' && inputs.build_track || github.event.schedule == '30 4 * * *' && 'nightly' || github.event.schedule == '30 5 * * *' && 'stable' || github.event.schedule == '30 6 * * *' && 'v5' || 'unmapped' }}
   cancel-in-progress: false
+  queue: max
 
 jobs:
   # ============================================
-  # Resolve which track this run builds
+  # Resolve which track this run builds, and its versions
   # ============================================
-  # Single source of truth for the track and the build matrix, consumed by
-  # every downstream job. A manual dispatch uses its input; a scheduled run
-  # maps the firing cron string (github.event.schedule) to a track.
+  # Single source of truth for the track, the build matrix and (stable/v5) the
+  # component versions, consumed by every downstream job. A manual dispatch
+  # uses its input; a scheduled run maps the firing cron string
+  # (github.event.schedule) to a track.
+  #
+  # The resolver runs here once. Its output (resolved_env) is handed to the
+  # republish guard and every build cell, which validate it before use, so
+  # they all compare and build exactly the same tags even if upstream tags a
+  # release in between. Exit code 3 is a deterministic hold (upstream
+  # reachable, nothing soaked yet): hold=true and the run builds nothing,
+  # successfully, even with force_rebuild. Any other failure fails the run.
   resolve-track:
     runs-on: ubuntu-24.04
     outputs:
       track: ${{ steps.pick.outputs.track }}
       matrix: ${{ steps.matrix.outputs.matrix }}
+      hold: ${{ steps.resolve.outputs.hold }}
+      resolved_env: ${{ steps.resolve.outputs.resolved_env }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # The build matrix (one cell per Debian release) comes from the distro
       # table in config.sh, so the workflow never lists distros itself.
@@ -75,97 +94,101 @@ jobs:
           echo "track=${TRACK}" >> "$GITHUB_OUTPUT"
           echo "Resolved track: ${TRACK}"
 
+      - name: Resolve stable/v5 component versions
+        id: resolve
+        if: steps.pick.outputs.track == 'stable' || steps.pick.outputs.track == 'v5'
+        env:
+          TRACK: ${{ steps.pick.outputs.track }}
+        run: |
+          set -euo pipefail
+          source scripts/ci_helpers.sh
+          RESOLVED="${RUNNER_TEMP}/resolved.env"
+          # hold=true on exit code 3; any other failure fails the step.
+          HOLD="$(resolve_track_versions "${TRACK}" . "${RESOLVED}")"
+          echo "${HOLD}" >> "$GITHUB_OUTPUT"
+          if [[ "${HOLD}" == "hold=true" ]]; then
+            echo "::notice::Resolver hold for ${TRACK}: no soaked release yet; nothing to build."
+            exit 0
+          fi
+          cat "${RESOLVED}"
+          {
+            echo "resolved_env<<RESOLVED_ENV_EOF"
+            cat "${RESOLVED}"
+            echo "RESOLVED_ENV_EOF"
+          } >> "$GITHUB_OUTPUT"
+
   # ============================================
   # Check if upstream components changed (nightly cron only)
   # ============================================
   # HEAD-SHA guard for the NIGHTLY cron only (nightly builds from upstream HEAD).
   # Gated to the 04:30 cron specifically so the stable/v5 crons — which are guarded
   # by check-republish instead — never trip this nightly-semantics short-circuit.
+  #
+  # It compares each component's upstream HEAD with the checkpoint of commits
+  # that were built AND deployed, per distro. This job only restores the
+  # checkpoint; the publish job saves it after a successful deploy, with only
+  # the distros it deployed. A failed or undeployed build therefore never
+  # marks its commits as done, and the next nightly builds them again.
   check-changes:
     if: github.event_name == 'schedule' && github.event.schedule == '30 4 * * *'
     runs-on: ubuntu-24.04
     outputs:
       skip: ${{ steps.detect.outputs.skip }}
     steps:
-      - name: Restore last-known SHAs
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          path: /tmp/nightly-sha.json
-          key: nightly-sha-v1-${{ github.run_number }}
-          restore-keys: |
-            nightly-sha-v1-
+          persist-credentials: false
 
+      - name: Restore the nightly checkpoint
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /tmp/nightly-revisions/checkpoint.txt
+          key: nightly-rev-v2-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            nightly-rev-v2-
+
+      # set -euo pipefail is hardening: run steps default to `bash -e`
+      # without pipefail, and a failed pipe should fail the step.
       - name: Detect upstream changes
         id: detect
         run: |
-          SHA_FILE="/tmp/nightly-sha.json"
-          OLD_SHAS=$(cat "$SHA_FILE" 2>/dev/null || echo "{}")
-
-          declare -A REPOS
-          REPOS[podman]="https://github.com/containers/podman.git"
-          REPOS[buildah]="https://github.com/containers/buildah.git"
-          REPOS[crun]="https://github.com/containers/crun.git"
-          REPOS[conmon]="https://github.com/containers/conmon"
-          REPOS[netavark]="https://github.com/containers/netavark"
-          REPOS[aardvark-dns]="https://github.com/containers/aardvark-dns"
-          REPOS[skopeo]="https://github.com/containers/skopeo.git"
-          REPOS[fuse-overlayfs]="https://github.com/containers/fuse-overlayfs.git"
-          REPOS[catatonit]="https://github.com/openSUSE/catatonit.git"
-          REPOS[container-libs]="https://github.com/containers/container-libs.git"
-          REPOS[pasta]="https://passt.top/passt"
-          REPOS[go-md2man]="https://github.com/cpuguy83/go-md2man.git"
-          REPOS[toolbox]="https://github.com/containers/toolbox.git"
-
-          CHANGED=""
-          NEW_SHAS="{"
-          FIRST=true
-
-          for comp in "${!REPOS[@]}"; do
-            HEAD_SHA=$(git ls-remote "${REPOS[$comp]}" HEAD 2>/dev/null | awk '{print $1}' | head -1 || echo "unknown")
-            OLD_SHA=$(echo "$OLD_SHAS" | grep -o "\"${comp}\":\"[^\"]*\"" | head -1 | sed 's/.*:"//;s/".*//')
-
-            if [[ -z "$OLD_SHA" || "$HEAD_SHA" != "$OLD_SHA" ]]; then
-              CHANGED="${CHANGED}  ${comp}: ${OLD_SHA:-<new>} -> ${HEAD_SHA}\n"
-            fi
-
-            [[ "$FIRST" == true ]] && FIRST=false || NEW_SHAS+=","
-            NEW_SHAS+="\"${comp}\":\"${HEAD_SHA}\""
-          done
-
-          NEW_SHAS+="}"
-          echo "$NEW_SHAS" > "$SHA_FILE"
-
-          if [[ -n "$CHANGED" ]]; then
-            echo -e "Changes detected:\n$CHANGED"
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "No upstream changes detected. Skipping build."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          fi
+          set -euo pipefail
+          source scripts/ci_helpers.sh
+          eval "$(sed -n '/^VALID_TRACKS=/,/^unset _distro _track$/p' config.sh)"
+          RESULT="$(nightly_detect_changes /tmp/nightly-revisions/checkpoint.txt "${VALID_DISTROS[@]}")"
+          echo "${RESULT}"
+          echo "${RESULT}" >> "$GITHUB_OUTPUT"
 
   # ============================================
   # Republish guard (stable/v5 — dispatch or cron)
   # ============================================
   # Both auto-updating tracks (stable, v5) would otherwise rebuild and
-  # republish every distro even when nothing changed. This job short-circuits the run when every component is
-  # already published at the version resolve_versions.sh would build (pasta is
-  # excluded — it floats by date; see scripts/check_republish_needed.sh). It is
-  # strictly conservative for the deb comparison (any fetch uncertainty yields
-  # skip=false), but a resolver HOLD yields skip=true (nothing valid to build).
+  # republish every distro even when nothing changed. This job short-circuits
+  # the run when every component (and the podman-suite meta-package) is
+  # already published, on every distro, at the version resolve-track resolved.
+  # It reads that resolved environment instead of running the resolver again.
+  # It is strictly conservative (any fetch uncertainty yields skip=false).
   # Nightly is untouched — check-changes guards its scheduled run.
   check-republish:
     needs: [resolve-track]
-    if: needs.resolve-track.outputs.track == 'stable' || needs.resolve-track.outputs.track == 'v5'
+    if: (needs.resolve-track.outputs.track == 'stable' || needs.resolve-track.outputs.track == 'v5') && needs.resolve-track.outputs.hold != 'true'
     runs-on: ubuntu-24.04
     outputs:
       skip: ${{ steps.guard.outputs.skip }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Compare resolved versions against the live repository
         id: guard
+        env:
+          TRACK: ${{ needs.resolve-track.outputs.track }}
+          RESOLVED_ENV: ${{ needs.resolve-track.outputs.resolved_env }}
+          REPO_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
         run: |
-          REPO_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
-          ./scripts/check_republish_needed.sh "${{ needs.resolve-track.outputs.track }}" "${REPO_URL}"
+          set -euo pipefail
+          printf '%s\n' "${RESOLVED_ENV}" > "${RUNNER_TEMP}/resolved.env"
+          ./scripts/check_republish_needed.sh "${TRACK}" "${REPO_URL}" "${RUNNER_TEMP}/resolved.env"
 
   # ============================================
   # Build every distro in one matrix
@@ -173,22 +196,27 @@ jobs:
   # One cell per Debian release, generated from config.sh by resolve-track.
   # Every cell runs in a clean Debian container on a GitHub-hosted amd64
   # runner (the runner only hosts the container). fail-fast: false, so a
-  # trixie failure does not abort the bookworm build. Go cache keys and
+  # trixie failure does not abort the bookworm build. Cache keys and
   # artifact names carry the distro, so one distro's cache or packages never
-  # end up in another's build or publish.
+  # end up in another's build or publish. The job name carries the distro
+  # too: the publish job reads each cell's conclusion by that name.
   build:
+    name: build-${{ matrix.distro }}
     needs: [resolve-track, check-changes, check-republish]
-    # Gate order: check-changes guards the nightly cron; check-republish guards the
-    # stable/v5 tracks (dispatch or cron). A SKIPPED guard job yields an empty
-    # output, and '' != 'true', so neither guard blocks a run it doesn't apply to.
-    # (Stable/v5 crons skip check-changes -> its '' passes the first clause, and
-    # check-republish gates them; the nightly cron skips check-republish likewise.)
-    # The `force_rebuild` dispatch input overrides the republish guard so a
-    # packaging-only change (no pinned-version bump) can still be republished; it
-    # is null on cron/push, so it only ever loosens a manual dispatch.
+    # Gate order: a resolver hold builds nothing (force_rebuild cannot
+    # override it: there are no versions to build). check-changes guards the
+    # nightly cron; check-republish guards the stable/v5 tracks (dispatch or
+    # cron). A SKIPPED guard job yields an empty output, and '' != 'true', so
+    # neither guard blocks a run it doesn't apply to. A FAILED guard blocks the
+    # build. The `force_rebuild` dispatch input overrides the republish guard so
+    # a packaging-only change (no pinned-version bump) can still be republished;
+    # it is null on cron, so it only ever loosens a manual dispatch.
     if: >-
       always()
       && needs.resolve-track.result == 'success'
+      && needs.resolve-track.outputs.hold != 'true'
+      && needs.check-changes.result != 'failure'
+      && needs.check-republish.result != 'failure'
       && (github.event_name == 'workflow_dispatch' || needs.check-changes.outputs.skip != 'true')
       && (needs.check-republish.outputs.skip != 'true' || inputs.force_rebuild)
     runs-on: ubuntu-24.04
@@ -203,7 +231,8 @@ jobs:
         include: ${{ fromJSON(needs.resolve-track.outputs.matrix) }}
     steps:
       # The Debian images start as root without the tooling the steps below
-      # need (sudo, git, curl, ca-certificates). setup.sh and
+      # need (sudo, git, curl, ca-certificates, and ccache to reset its
+      # counters before the build). setup.sh and
       # install_dependencies.sh install the actual build dependencies; this
       # only bootstraps enough to reach setup.sh. The apt drop-in adds retries
       # and a timeout so a transient mirror hiccup does not fail the build; it
@@ -213,7 +242,7 @@ jobs:
           printf '%s\n' 'Acquire::Retries "8";' 'Acquire::http::Timeout "30";' \
             > /etc/apt/apt.conf.d/99-ci-resilient
           apt-get update
-          apt-get install -y --no-install-recommends sudo git curl ca-certificates
+          apt-get install -y --no-install-recommends sudo git curl ca-certificates ccache
 
       # /dev/fuse in the build container: the job container is created without
       # --device /dev/fuse. mknod'ing the node inside the container succeeds
@@ -224,6 +253,8 @@ jobs:
       # opens /dev/fuse (it is a runtime-only requirement of fuse-overlayfs),
       # so the build step sets SKIP_FUSE_CHECK=true instead of creating the node.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # The version-suffix ordering is a packaging contract (bookworm < trixie,
       # nightly < tagged, revision bumps upgrade). Check it before spending
@@ -238,6 +269,41 @@ jobs:
           echo "track=${TRACK}" >> "$GITHUB_OUTPUT"
           echo "Build track: ${TRACK}"
 
+      # Turns the track into KEY=VALUE pairs for setup.sh. For stable/v5 those
+      # are resolve-track's tags, validated before use. Also works out the two
+      # toolchain versions in the compiler cache key: the Rust version the
+      # build will install (passed on as RUST_VERSION so both agree) and the
+      # sccache version from config.sh.
+      - name: Prepare the build environment
+        id: env
+        env:
+          TRACK: ${{ steps.track.outputs.track }}
+          RESOLVED_ENV: ${{ needs.resolve-track.outputs.resolved_env }}
+        run: |
+          set -euo pipefail
+          source scripts/ci_helpers.sh
+          BUILD_ENV="${RUNNER_TEMP}/build-env"
+          if [[ "${TRACK}" == "stable" || "${TRACK}" == "v5" ]]; then
+            printf '%s\n' "${RESOLVED_ENV}" > "${RUNNER_TEMP}/resolved.env"
+            resolved_env_pairs "${RUNNER_TEMP}/resolved.env" > "${BUILD_ENV}"
+          elif [[ "${TRACK}" == "nightly" ]]; then
+            printf '%s\n' NIGHTLY_BUILD=true SHALLOW_CLONE=false > "${BUILD_ENV}"
+          else
+            echo "::error::unknown track '${TRACK}'"; exit 1
+          fi
+          NETAVARK_TAG="$(sed -n 's/^NETAVARK_TAG=//p' "${BUILD_ENV}")"
+          RUST="$(export SKIP_CONFIG_SOURCE=1 && source ./functions.sh && get_required_rust_version "${NETAVARK_TAG}")"
+          # The single quotes keep ${...} literal for sed.
+          # shellcheck disable=SC2016
+          SCCACHE="$(sed -n 's/^export SCCACHE_VERSION="\${SCCACHE_VERSION:-\([^}]*\)}"$/\1/p' config.sh)"
+          for v in "${RUST}" "${SCCACHE}"; do
+            [[ "${v}" =~ ^[A-Za-z0-9.]+$ ]] || { echo "::error::bad toolchain version '${v}'"; exit 1; }
+          done
+          echo "RUST_VERSION=${RUST}" >> "${BUILD_ENV}"
+          echo "rust=${RUST}" >> "$GITHUB_OUTPUT"
+          echo "sccache=${SCCACHE}" >> "$GITHUB_OUTPUT"
+          cat "${BUILD_ENV}"
+
       - name: Cache Go modules and build cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -250,56 +316,89 @@ jobs:
             go-${{ matrix.distro }}-${{ steps.track.outputs.track }}-
             go-${{ matrix.distro }}-
 
+      # Rust (sccache) and C (ccache) compiler output. Keyed by distro,
+      # architecture, track, Rust version and sccache version, restored by
+      # prefix from the latest run with the same toolchain. A key is only an
+      # index: sccache hashes the rustc binary and ccache hashes the compiler
+      # (compilercheck=content), so a changed toolchain behind the same key
+      # misses the cache instead of reusing a wrong object. Sizes are capped
+      # in the build step. Only compiler output lives here, never signing
+      # keys or repository state. Restore only: the save step after the
+      # report writes a new entry only when this run added to the cache, so
+      # unchanged runs do not use up the repository's cache quota.
+      - name: Restore Rust and C compiler output
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/sccache
+            ~/.cache/ccache
+          key: cc-v1-${{ matrix.distro }}-amd64-${{ steps.track.outputs.track }}-rust${{ steps.env.outputs.rust }}-sccache${{ steps.env.outputs.sccache }}-${{ github.run_id }}
+          restore-keys: |
+            cc-v1-${{ matrix.distro }}-amd64-${{ steps.track.outputs.track }}-rust${{ steps.env.outputs.rust }}-sccache${{ steps.env.outputs.sccache }}-
+
       - name: Build all components
         run: |
+          set -euo pipefail
           DESTDIR="${{ runner.temp }}/podman-staging"
           mkdir -p "$DESTDIR"
-          # Ensure Go cache dirs exist and are writable by root
-          mkdir -p "$HOME/.cache/go-build" "$HOME/.cache/go-mod"
-          # Build env args for sudo env (bypasses env_reset completely)
-          # Point Go caches to runner-accessible paths for actions/cache compatibility
-          ENV_ARGS="DEBIAN_FRONTEND=noninteractive DESTDIR=$DESTDIR"
-          ENV_ARGS="$ENV_ARGS GOCACHE=$HOME/.cache/go-build GOMODCACHE=$HOME/.cache/go-mod"
-          # Pass the matrix distro as the DISTRO override so config.sh composes
-          # VERSION_SUFFIX=~deb{VERSION_ID}.podman{N} for this cell. config.sh
-          # rejects anything that is not in its distro table.
-          ENV_ARGS="$ENV_ARGS DISTRO=${{ matrix.distro }}"
-          # /dev/fuse is unusable inside the job container (see the note above
-          # the checkout step). Nothing opens it during compilation, and the
-          # FUSE preflight check is only a warning anyway; SKIP_FUSE_CHECK=true
-          # marks this as a build-only environment.
-          ENV_ARGS="$ENV_ARGS SKIP_FUSE_CHECK=true"
-          TRACK="${{ steps.track.outputs.track }}"
-          if [[ "$TRACK" == "stable" || "$TRACK" == "v5" ]]; then
-            # Materialize concrete *_TAG values from the track policy (series-cap +
-            # soak + buildah-derive). Resolver exit codes: 0 ok; 3 = deterministic
-            # hold (nothing soaked yet, upstream reachable) -> nothing to build,
-            # exit the step cleanly; other non-zero = uncertain/error -> fail loud.
-            if RESOLVED="$(./scripts/resolve_versions.sh "versions-${TRACK}.env")"; then
-              while IFS= read -r line; do
-                [[ "$line" =~ ^[[:space:]]*# || -z "$line" ]] && continue
-                line="${line#export }"
-                key="${line%%=*}"
-                val="${line#*=}"
-                val="${val%\"}"
-                val="${val#\"}"
-                ENV_ARGS="$ENV_ARGS ${key}=${val}"
-              done <<< "$RESOLVED"
-            else
-              rc=$?
-              if [[ "$rc" -eq 3 ]]; then
-                echo "Resolver: no soaked target yet for ${TRACK}; nothing to build."
-                exit 0
-              fi
-              echo "::error::resolver failed for ${TRACK} (rc=$rc)"; exit "$rc"
-            fi
-          elif [[ "$TRACK" == "nightly" ]]; then
-            ENV_ARGS="$ENV_ARGS NIGHTLY_BUILD=true SHALLOW_CLONE=false"
-          fi
-          sudo env $ENV_ARGS ./setup.sh
-          # Fix ownership so actions/cache can save the Go caches
-          sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/go-build" "$HOME/.cache/go-mod"
+          # Cache dirs must exist and be writable by root.
+          mkdir -p "$HOME/.cache/go-build" "$HOME/.cache/go-mod" "$HOME/.cache/sccache" "$HOME/.cache/ccache"
+          # Arguments for `sudo env` (bypasses env_reset completely). Caches
+          # point at runner-visible paths so actions/cache can save them.
+          env_args=(
+            DEBIAN_FRONTEND=noninteractive
+            "DESTDIR=${DESTDIR}"
+            "GOCACHE=$HOME/.cache/go-build" "GOMODCACHE=$HOME/.cache/go-mod"
+            # The matrix distro is the DISTRO override, so config.sh composes
+            # VERSION_SUFFIX=~deb{VERSION_ID}.podman{N} for this cell. config.sh
+            # rejects anything that is not in its distro table.
+            "DISTRO=${{ matrix.distro }}"
+            # /dev/fuse is unusable inside the job container (see the note
+            # above the checkout step). Nothing opens it during compilation.
+            SKIP_FUSE_CHECK=true
+            # Compiler caches. CACHE_STRICT fails the build if a wrapper is
+            # missing, so a broken cache is a failure, not a slow build. The
+            # sccache server never idles out, so the report step can read
+            # its statistics afterwards.
+            SCCACHE_ENABLED=true CCACHE_ENABLED=true CACHE_STRICT=true
+            "SCCACHE_DIR=$HOME/.cache/sccache" SCCACHE_CACHE_SIZE=1G SCCACHE_IDLE_TIMEOUT=0
+            "CCACHE_DIR=$HOME/.cache/ccache" CCACHE_MAXSIZE=500M
+          )
+          # Track environment from the previous step: resolved tags (stable/v5)
+          # or the nightly switches, plus RUST_VERSION.
+          while IFS= read -r pair; do
+            [[ -n "${pair}" ]] && env_args+=("${pair}")
+          done < "${RUNNER_TEMP}/build-env"
+          # ccache keeps its counters in CCACHE_DIR, which was just restored.
+          # Zero them so the report counts only this run.
+          CCACHE_DIR="$HOME/.cache/ccache" ccache --zero-stats
+          sudo env "${env_args[@]}" ./setup.sh
         timeout-minutes: 150
+
+      # Proves the wrappers were used: compiler_cache_report fails the cell
+      # when an enabled cache saw no compile requests. Also stops the
+      # sccache server so its cache is flushed before it is saved, and sets
+      # changed=true when either cache missed (added entries) this run.
+      - name: Report compiler cache use
+        id: ccreport
+        run: |
+          set -euo pipefail
+          source scripts/ci_helpers.sh
+          SCCACHE_ENABLED=true CCACHE_ENABLED=true \
+            SCCACHE_DIR="$HOME/.cache/sccache" CCACHE_DIR="$HOME/.cache/ccache" \
+            compiler_cache_report
+          # Fix ownership so actions/cache can save the caches.
+          sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/go-build" "$HOME/.cache/go-mod" \
+            "$HOME/.cache/sccache" "$HOME/.cache/ccache"
+
+      - name: Save Rust and C compiler output
+        if: steps.ccreport.outputs.changed == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/sccache
+            ~/.cache/ccache
+          key: cc-v1-${{ matrix.distro }}-amd64-${{ steps.track.outputs.track }}-rust${{ steps.env.outputs.rust }}-sccache${{ steps.env.outputs.sccache }}-${{ github.run_id }}
 
       - name: Debug DESTDIR contents
         if: always()
@@ -323,7 +422,8 @@ jobs:
       - name: Install nFPM
         run: |
           # Use Go installed by setup.sh
-          export PATH="/opt/go/$(ls /opt/go/)/bin:$HOME/go/bin:$PATH"
+          PATH="/opt/go/$(ls /opt/go/)/bin:$HOME/go/bin:$PATH"
+          export PATH
           go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.45.0
 
       - name: Package all components
@@ -332,7 +432,8 @@ jobs:
           # per-distro VERSION_SUFFIX and the .deb filenames carry
           # ~deb{VERSION_ID}.podman{N} for this cell.
           export DISTRO="${{ matrix.distro }}"
-          export PATH="/opt/go/$(ls /opt/go/)/bin:$HOME/go/bin:$PATH"
+          PATH="/opt/go/$(ls /opt/go/)/bin:$HOME/go/bin:$PATH"
+          export PATH
           export DESTDIR="${{ runner.temp }}/podman-staging"
           if [[ "${{ steps.track.outputs.track }}" == "nightly" ]]; then
             export NIGHTLY_BUILD=true
@@ -346,18 +447,40 @@ jobs:
       - name: Verify detected dependencies
         run: |
           export DISTRO="${{ matrix.distro }}"
-          export PATH="/opt/go/$(ls /opt/go/)/bin:$HOME/go/bin:$PATH"
+          PATH="/opt/go/$(ls /opt/go/)/bin:$HOME/go/bin:$PATH"
+          export PATH
           export DESTDIR="${{ runner.temp }}/podman-staging"
           ./scripts/verify_depends.sh
+
+      # Nightly only: the upstream commits this cell compiled. The publish
+      # job folds them into the nightly checkpoint once this distro is
+      # deployed.
+      - name: Record the nightly revisions this cell built
+        if: steps.track.outputs.track == 'nightly'
+        run: |
+          set -euo pipefail
+          source scripts/ci_helpers.sh
+          mkdir -p nightly-revs
+          nightly_record_revisions build "${{ matrix.distro }}" > nightly-revs/revisions.txt
+          cat nightly-revs/revisions.txt
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           # One artifact per distro: debs-bookworm, debs-trixie.
           name: debs-${{ matrix.distro }}
           path: output/*.deb
+          if-no-files-found: error
           # The publish job consumes these within the same run; retention only
           # serves post-hoc debugging. Kept short so daily nightly builds don't
           # accumulate ~30 days of .deb artifacts in Actions storage.
+          retention-days: 7
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.track.outputs.track == 'nightly'
+        with:
+          name: nightly-revs-${{ matrix.distro }}
+          path: nightly-revs/revisions.txt
+          if-no-files-found: error
           retention-days: 7
 
   # ============================================
@@ -365,138 +488,164 @@ jobs:
   # ============================================
   # Runs when at least one build cell succeeded. needs.build.result is
   # 'success' when every cell passed and 'failure' when some failed
-  # (fail-fast: false); 'cancelled' or 'skipped' means no build ran. A distro
-  # whose cell failed has no artifact: publish_distro skips it, and its suites
-  # are carried over unchanged from the live repo by the other distro's
-  # ci_publish.sh pass. If no distro published at all, the job fails before
-  # deploying. The repo is assembled completely in repo-output and deployed
-  # to Pages in one step, so the live repo is replaced whole or not at all.
+  # (fail-fast: false); 'cancelled' or 'skipped' means no build ran.
+  #
+  # The job reads each cell's conclusion from the GitHub API and publishes
+  # exactly the distros whose cell succeeded. Their artifacts must download;
+  # a missing artifact for a successful cell fails the job instead of
+  # quietly publishing less. A distro whose cell failed is not published:
+  # its suites are carried over unchanged from the live repo by the other
+  # distros' ci_publish.sh passes. If no distro succeeded, nothing deploys.
+  #
+  # The repo is assembled completely in repo-output and deployed to Pages in
+  # one step, so the live repo is replaced whole or not at all. The
+  # pages-deploy concurrency group queues publish jobs from every track, so
+  # only one run assembles and deploys at a time, and each one starts from
+  # what the previous one deployed (it waits for the deploy to reach the
+  # live site before it releases the group).
   publish:
     needs: [resolve-track, build]
     if: always() && github.ref == 'refs/heads/main' && (needs.build.result == 'success' || needs.build.result == 'failure')
     runs-on: ubuntu-24.04
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      contents: read
+      actions: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      TRACK: ${{ needs.resolve-track.outputs.track }}
+      REPO_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Run doc and HTML unit tests
         run: |
           bash tests/test_docs_suites.sh
           bash tests/test_index_html_distro.sh
 
-      - name: Resolve build track
-        id: track
+      # Every build cell's conclusion, by job name (build-<distro>). The
+      # run-wide list with filter=latest includes cells that succeeded in an
+      # earlier attempt when only failed jobs were re-run.
+      - name: Read build cell conclusions
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          TRACK="${{ needs.resolve-track.outputs.track }}"
-          echo "track=${TRACK}" >> "$GITHUB_OUTPUT"
-          echo "Build track: ${TRACK}"
+          set -euo pipefail
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest" \
+            --jq '.jobs[] | select(.name | startswith("build-")) | "\(.name | ltrimstr("build-")) \(.conclusion)"' \
+            > "${RUNNER_TEMP}/cells.txt"
+          cat "${RUNNER_TEMP}/cells.txt"
 
       # Each distro's artifact downloads into its own directory
       # (artifacts/debs-bookworm/, artifacts/debs-trixie/): no merge-multiple,
       # so packages built for one release can never land in another's publish.
-      # A failed cell has no artifact; that distro's directory is missing.
+      # A download error fails the job; the next step checks that every
+      # successful cell's artifact arrived.
       - name: Download build artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        continue-on-error: true
         with:
           pattern: debs-*
           path: artifacts/
 
+      - name: Download nightly revisions
+        if: needs.resolve-track.outputs.track == 'nightly'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: nightly-revs-*
+          path: artifacts/
+
+      - name: Select the distros to publish
+        id: select
+        run: |
+          set -euo pipefail
+          source scripts/ci_helpers.sh
+          eval "$(sed -n '/^VALID_TRACKS=/,/^unset _distro _track$/p' config.sh)"
+          REQUIRE_REVS=false
+          [[ "${TRACK}" == "nightly" ]] && REQUIRE_REVS=true
+          SELECTED="$(published_distros "${RUNNER_TEMP}/cells.txt" artifacts "${REQUIRE_REVS}" "${VALID_DISTROS[@]}")"
+          SELECTED="$(printf '%s\n' "${SELECTED}" | xargs)"
+          if [[ -z "${SELECTED}" ]]; then
+            echo "::error::no build cell succeeded; refusing to deploy"
+            exit 1
+          fi
+          echo "Publishing: ${SELECTED}"
+          echo "distros=${SELECTED}" >> "$GITHUB_OUTPUT"
+
+      # gpgv checks the signatures in verify_repo_integrity.sh.
       - name: Install reprepro
         run: |
           sudo apt-get update
-          sudo apt-get install -y reprepro
+          sudo apt-get install -y reprepro gpgv
 
       # Gate the publish on the repo-assembly regression tests. These drive the
       # real ci_publish.sh / repo_manage.sh hermetically (throwaway GPG, temp
       # dirs, a local mock HTTP repo); they never touch the live repo or deploy.
-      # test_ci_publish_multipass reproduces the two-pass cross-distro clobber
-      # (the trixie pass overwriting the bookworm pass's fresh suites); a
-      # regression here blocks deploy.
+      # REQUIRE_INTEGRATION_DEPS=1 makes a missing tool a failure, not a skip.
       - name: Run repo-assembly regression tests
+        env:
+          REQUIRE_INTEGRATION_DEPS: '1'
         run: |
+          set -euo pipefail
           bash tests/test_repo_assemble_byhash.sh
           bash tests/test_ci_publish_multipass.sh
           bash tests/test_ci_publish_shared_pool.sh
           bash tests/test_verify_repo_integrity.sh
 
       # Per-distro sequential publish into ONE accumulating repo-output, in
-      # VALID_DISTROS order (config.sh). ci_publish.sh's mirror-then-include
-      # model (OTHER_SUITES = ALL_SUITES minus PUBLISH_TARGETS) re-mirrors
-      # non-target suites from the live repo, EXCEPT any suite an earlier pass
-      # already put into repo-output. Those are kept in place so a later pass
-      # cannot clobber an earlier pass's freshly built suites.
+      # VALID_DISTROS order (config.sh), for the selected distros only.
+      # ci_publish.sh's mirror-then-include model (OTHER_SUITES = ALL_SUITES
+      # minus PUBLISH_TARGETS) re-mirrors non-target suites from the live repo,
+      # EXCEPT any suite an earlier pass already put into repo-output. Those
+      # are kept in place so a later pass cannot clobber an earlier pass's
+      # freshly built suites.
       - name: Build and publish repository
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          DISTROS: ${{ steps.select.outputs.distros }}
         run: |
-          REPO_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
-          TRACK="${{ steps.track.outputs.track }}"
-          eval "$(sed -n '/^VALID_TRACKS=/,/^unset _distro _track$/p' config.sh)"
-
-          # publish_distro <distro> <deb-dir>: skip (with a logged message) if
-          # the distro's artifact dir holds no .deb files, which is what a
-          # failed build cell leaves behind. ci_publish.sh hard-fails on an
-          # empty deb dir, and one failed distro must not block the others.
-          published=0
-          publish_distro() {
-            local label="$1"
-            local deb_dir="$2"
-            local count
-            count=$(find "${deb_dir}" -maxdepth 1 -name '*.deb' -type f 2>/dev/null | wc -l)
-            if [[ "${count}" -eq 0 ]]; then
-              echo "::warning::no .deb files in ${deb_dir}; skipping ci_publish.sh for ${label}"
-              return 0
-            fi
-            echo ">>> Publishing ${label} (${count} debs from ${deb_dir})"
-            ./scripts/ci_publish.sh "${TRACK}" "${label}" "${deb_dir}" "${REPO_URL}" "repo-output"
-            published=$((published + 1))
-          }
-
-          for distro in "${VALID_DISTROS[@]}"; do
-            publish_distro "${distro}" "artifacts/debs-${distro}"
+          set -euo pipefail
+          for distro in ${DISTROS}; do
+            echo ">>> Publishing ${distro} from artifacts/debs-${distro}"
+            ./scripts/ci_publish.sh "${TRACK}" "${distro}" "artifacts/debs-${distro}" "${REPO_URL}" "repo-output"
           done
-
-          if [[ "${published}" -eq 0 ]]; then
-            echo "::error::no distro produced packages; refusing to deploy"
-            exit 1
-          fi
 
       # Integrity gate (explicit, on the fully-assembled repo). ci_publish.sh
       # already runs verify_repo_integrity.sh at the end of each pass; re-run it
       # here over the final combined repo-output as the last checkpoint before the
-      # Pages upload. Asserts every suite's signed index matches Release AND the
-      # pool .debs it advertises, the guardrail against the "File has unexpected
-      # size" shared-pool overwrite bug. A mismatch fails the job and no partial or
-      # inconsistent repository is ever deployed.
+      # Pages upload. Asserts every suite is signed by the published key, its
+      # signed index matches Release AND the pool .debs it advertises. A
+      # mismatch fails the job and no partial or inconsistent repository is
+      # ever deployed.
       - name: Verify repository integrity before publish
-        run: ./scripts/verify_repo_integrity.sh "$PWD/repo-output"
+        run: ./scripts/verify_repo_integrity.sh --keyring "$PWD/repo-output/podman-debian.gpg" "$PWD/repo-output"
 
-      # Installability smoke gate. Runs after every ci_publish.sh pass
-      # (repo-output is fully assembled and signed) and before the Pages
-      # upload, so an uninstallable package never reaches the live repo. For
-      # each distro with a suite for this track in repo-output, it runs the
-      # fresh / migrate-from-distro / upgrade-from-live scenarios against the
-      # assembled file:// repo in a clean Debian container. The helper exits 1
-      # on failure, which stops the job before configure-pages,
-      # upload-pages-artifact and deploy-pages. It runs on every publish
-      # (stable/v5/nightly).
+      # Installability smoke gate, before the Pages upload, so an
+      # uninstallable package never reaches the live repo. It runs for the
+      # distros built and published by this run (suites carried over from the
+      # live repo were tested when they were published). For each, it runs
+      # the fresh / migrate-from-distro / upgrade-from-live scenarios against
+      # the assembled file:// repo in a clean Debian container, with apt
+      # checking the signatures. The helper exits 1 on failure, which stops
+      # the job before configure-pages, upload-pages-artifact and deploy-pages.
       - name: Smoke test, install podman-suite from the assembled repo per distro
+        env:
+          DISTROS: ${{ steps.select.outputs.distros }}
         run: |
           set -euo pipefail
-          TRACK="${{ steps.track.outputs.track }}"
-          LIVE_REPO_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
-          export TRACK LIVE_REPO_URL
-          eval "$(sed -n '/^VALID_TRACKS=/,/^unset _distro _track$/p' config.sh)"
+          export LIVE_REPO_URL="${REPO_URL}"
           echo ">>> Running smoke gate for track ${TRACK}"
-          for distro in "${VALID_DISTROS[@]}"; do
-            if [[ -d "$PWD/repo-output/dists/${TRACK}-${distro}" ]]; then
-              ./scripts/smoke_repo_install.sh "${distro}" "$PWD/repo-output"
-            else
-              echo ">>> Skipping ${distro} smoke: ${TRACK}-${distro} is not in repo-output (its build may have failed)"
-            fi
+          for distro in ${DISTROS}; do
+            ./scripts/smoke_repo_install.sh "${distro}" "$PWD/repo-output"
           done
 
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
@@ -509,3 +658,55 @@ jobs:
 
       - id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
+
+      # The deploy is done when clients can see it. Poll each published
+      # suite's live InRelease until it matches the deployed one. The next
+      # queued publish starts from the live repo, and the nightly checkpoint
+      # below is only saved once this holds.
+      - name: Wait for the deploy to reach the live site
+        env:
+          DISTROS: ${{ steps.select.outputs.distros }}
+        run: |
+          set -euo pipefail
+          source scripts/ci_helpers.sh
+          suites=()
+          for distro in ${DISTROS}; do
+            suites+=("${TRACK}-${distro}")
+          done
+          wait_for_propagation "${REPO_URL}" "$PWD/repo-output" "${suites[@]}"
+
+      # Nightly only: record what is now deployed. Restore the latest
+      # checkpoint, replace the entries of the distros this run deployed with
+      # the revisions their cells built, and save it under a new key.
+      - name: Restore the nightly checkpoint
+        if: needs.resolve-track.outputs.track == 'nightly'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /tmp/nightly-revisions/checkpoint.txt
+          key: nightly-rev-v2-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            nightly-rev-v2-
+
+      - name: Merge the deployed nightly revisions
+        if: needs.resolve-track.outputs.track == 'nightly'
+        env:
+          DISTROS: ${{ steps.select.outputs.distros }}
+        run: |
+          set -euo pipefail
+          source scripts/ci_helpers.sh
+          mkdir -p /tmp/nightly-revisions
+          files=()
+          for distro in ${DISTROS}; do
+            files+=("artifacts/nightly-revs-${distro}/revisions.txt")
+          done
+          nightly_merge_revisions /tmp/nightly-revisions/checkpoint.txt \
+            /tmp/nightly-revisions/checkpoint.new "${files[@]}"
+          mv /tmp/nightly-revisions/checkpoint.new /tmp/nightly-revisions/checkpoint.txt
+          cat /tmp/nightly-revisions/checkpoint.txt
+
+      - name: Save the nightly checkpoint
+        if: needs.resolve-track.outputs.track == 'nightly'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /tmp/nightly-revisions/checkpoint.txt
+          key: nightly-rev-v2-${{ github.run_id }}-${{ github.run_attempt }}

@@ -37,3 +37,7 @@ CLAUDE.local.md
 .codanna/
 .codannaignore
 .fastembed_cache/
+
+# Python bytecode (tests/lib/mock_http_server.py)
+__pycache__/
+*.pyc

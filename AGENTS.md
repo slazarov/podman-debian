@@ -40,13 +40,14 @@ There is no package.json, no compiler, no app server. Everything is Bash.
 | `scripts/repo_manage.sh`, `scripts/ci_publish.sh` | APT repo assembly (reprepro); the distro argument doubles as the `DISTRO` override |
 | `scripts/index_html.sh` | Generates the repository landing page from the distro table |
 | `scripts/ci_matrix.sh` | Prints the CI build matrix (one cell per distro) from the distro table |
+| `scripts/ci_helpers.sh` | Shared CI logic, sourceable without `config.sh`: `fetch_url` (absent versus failed, with retries), resolved-env validation, nightly revision checkpoint, build cell selection, deploy propagation, compiler cache report |
 | `scripts/verify_depends.sh`, `scripts/verify_versions.sh` | Post-build dependency baselines per release; version-ordering checks |
 | `scripts/smoke_install.sh`, `scripts/smoke_repo_install.sh` | Install proofs in clean Debian containers (local `.deb` files; assembled repo) |
 | `packaging/nfpm/*.yaml` | nFPM package definitions (one per component) |
 | `packaging/repo/conf/distributions` | reprepro suites, one per entry in `ALL_SUITES` |
 | `versions-stable.env` / `versions-v5.env` | Track version policy; resolved by `scripts/resolve_versions.sh` |
 | `versions-nightly.env` | Nightly behavior flags (sourced before `setup.sh`) |
-| `tests/` | Bash unit tests, run directly: `bash tests/<test>.sh` |
+| `tests/` | Bash unit tests, run directly: `bash tests/<test>.sh`. `tests/lib/` holds a fault-injecting mock HTTP server and `require_integration_deps` |
 | `.github/workflows/build-packages.yml` | CI: per-distro builds in Debian containers (amd64), repo publish |
 | `.github/workflows/lint.yml` | CI gate: ShellCheck, shfmt, `tests/`, gitleaks (every PR) |
 | `docs/` | Architecture (including CI and publishing), configuration, APT repo, testing |
@@ -61,6 +62,8 @@ bash -n scripts/build_podman.sh
 
 # Run unit tests (work anywhere with bash; some checks skip without dpkg/reprepro)
 for t in tests/*.sh; do bash "$t" || echo "FAIL $t"; done
+# Same, but a missing integration tool fails instead of skipping (what CI does)
+REQUIRE_INTEGRATION_DEPS=1 bash tests/test_ci_publish_multipass.sh
 
 # Full build (Debian 12/13, as root)
 eval "$(./scripts/resolve_versions.sh versions-stable.env)" && sudo -E ./setup.sh  # stable (Podman 6.x)
@@ -81,7 +84,8 @@ sudo NIGHTLY_BUILD=true SHALLOW_CLONE=false ./setup.sh                          
 
 - `#!/bin/bash` and `set -euo pipefail` at the top of every script.
 - Toolpath bootstrap before any work (copy from an existing script): source `config.sh` then `functions.sh`, then install the error trap `trap 'error_handler $? $LINENO "$BASH_SOURCE"' ERR`.
-- Use `functions.sh` helpers instead of inlining: `git_clone_update`/`git_checkout` for cloning, `run_logged` for build output, `detect_architecture` for arch.
+- Use `functions.sh` helpers instead of inlining: `git_clone_update`/`git_checkout` for cloning, `run_logged` for build output, `detect_architecture` for arch, `enable_rust_compiler_cache`/`enable_c_compiler_cache` for sccache and ccache.
+- In CI scripts, download from the live repository with `fetch_url` (`scripts/ci_helpers.sh`), never `curl ... || true`. Only its "absent" result (HTTP 404/410) may be read as "not published"; any other failure must stop the publish.
 - Variables: `UPPERCASE` for env/config, `lowercase` locals, function-local parameters prefixed `l` (`lcomponent`, `lfolder`). Always quote expansions: `"${VAR}"`. 4-space indent inside functions.
 - snake_case function names; guard sourced files with the `_SOURCED` pattern.
 - Run ShellCheck over touched scripts before finishing (CI enforces `severity=error` via `.github/workflows/lint.yml`).

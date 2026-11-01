@@ -24,16 +24,24 @@
 #      affected suites' indexes from the real pool bytes so the result is
 #      consistent again. Assert the assembled repo passes the integrity guard.
 #
+#   D. ADOPT: a stable republish whose rebuild of an UNCHANGED package (same
+#      name, version and architecture as the live stable index) has different
+#      bytes. Only the target suite lists that package, so the output pool
+#      cannot help; the published bytes must be downloaded and adopted, and
+#      the fresh rebuild dropped.
+#
 # Without the fix, ci_publish.sh's own integrity gate (or the standalone guard)
-# fails both.
+# fails A to C, and D overwrites published bytes.
 #
 # Needs reprepro, gpg and dpkg-deb. Prints SKIP and exits 0 where they are
-# missing.
+# missing (a failure under REQUIRE_INTEGRATION_DEPS=1).
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "${SCRIPT_DIR}")"
+# shellcheck source=tests/lib/mock_http.sh
+source "${SCRIPT_DIR}/lib/mock_http.sh"
 
 PASS_COUNT=0
 FAIL_COUNT=0
@@ -53,12 +61,14 @@ assert_equals() {
 
 if ! command -v reprepro &>/dev/null \
    || ! command -v gpg &>/dev/null \
+   || ! command -v gpgv &>/dev/null \
    || ! command -v dpkg-deb &>/dev/null \
    || ! command -v sha256sum &>/dev/null \
    || ! command -v sha512sum &>/dev/null \
    || ! command -v python3 &>/dev/null \
    || ! command -v curl &>/dev/null; then
-    echo "  SKIP: reprepro/gpg/dpkg-deb/sha256sum/sha512sum/python3/curl not all available."
+    echo "  SKIP: reprepro/gpg/gpgv/dpkg-deb/sha256sum/sha512sum/python3/curl not all available."
+    require_integration_deps "reprepro/gpg/gpgv/dpkg-deb/sha256sum/sha512sum/python3/curl"
     echo "        This integration harness needs a Debian-based host with:"
     echo "          sudo apt-get update && sudo apt-get install -y reprepro"
     echo ""
@@ -112,6 +122,11 @@ EOF_KEYGEN_RSA
 fi
 TEST_KEY_FPR="$(gpg --list-keys --with-colons | awk -F: '/^fpr:/{print $10; exit}')"
 echo "${TEST_KEY_FPR}:6:" | gpg --batch --import-ownertrust >/dev/null 2>&1
+# ci_publish.sh checks every signature against REPO_KEYRING; here that is
+# the throwaway key, not the project's published one.
+export REPO_KEYRING="${TMP_ROOT}/test-key.gpg"
+gpg --batch --export "${TEST_KEY_FPR}" > "${REPO_KEYRING}"
+export FETCH_RETRY_DELAY=0 FETCH_ATTEMPTS=3
 echo ""
 
 # build_deb <pkg> <version> <arch> <out-dir> <payload>
@@ -155,12 +170,8 @@ version_id() { case "$1" in bookworm) echo 12;; trixie) echo 13;; esac; }
 skopeo_ver() { echo "1.23.0~deb$(version_id "$1").podman1"; }   # shared across stable + v5
 skopeo_filename() { echo "pool/main/p/podman-skopeo/podman-skopeo_$(skopeo_ver "$1")_amd64.deb"; }
 
-# add_byhash_and_resign installs a RETURN trap referencing a function-local
-# variable, so (like every sibling harness) it must be called at TOP-LEVEL script
-# scope — never from inside another function, where the enclosing function's
-# return would re-fire the trap after that local is out of scope. Hence build_live
-# only assembles via repo_manage.sh (a separate process); signing is done at top
-# level right after each call.
+# build_live only assembles via repo_manage.sh (a separate process); each
+# scenario signs the suites right after it with add_byhash_and_resign.
 # shellcheck source=/dev/null
 source "${PROJECT_ROOT}/scripts/repo_byhash.sh"
 
@@ -219,8 +230,7 @@ serve() {  # <dir> <probe-suite> -> sets REPO_URL / HTTP_PID
 
 # assert_prevent <distro> <live> — a v5 publish whose shared-skopeo rebuild has
 # DIFFERENT bytes must NOT overwrite the published pool .deb; every suite stays
-# consistent. NB: this is a plain function (it never calls add_byhash_and_resign),
-# so it is free of the RETURN-trap-leak constraint noted above build_live.
+# consistent.
 assert_prevent() {
     local distro="$1" live="$2"
     local d; d="$(version_id "${distro}")"
@@ -356,7 +366,56 @@ for s in stable-bookworm v5-bookworm; do
     assert_equals "healed suite '${s}' still present with podman-skopeo (no-drop)" \
         "${SK_BOOKWORM}" \
         "$(pkg_version "${OUT_B}/dists/${s}/main/binary-amd64/Packages" podman-skopeo)"
+    # A healed suite is regenerated, so it keeps the previous by-hash
+    # generation for clients still holding the old Release.
+    old_rel="$(sha256sum "${LIVE_B}/dists/${s}/Release" | awk '{print $1}')"
+    assert_equals "healed suite '${s}' keeps the previous Release under by-hash" "yes" \
+        "$(cmp -s "${LIVE_B}/dists/${s}/Release" "${OUT_B}/dists/${s}/by-hash/SHA256/${old_rel}" && echo yes || echo no)"
 done
+
+echo ""
+
+# ============================================
+# Scenario D: ADOPT the published bytes of an unchanged target package.
+# ============================================
+
+echo "========================================"
+echo "Scenario D: an unchanged package in the target suite keeps its published bytes (bookworm)"
+echo "========================================"
+
+LIVE_D="${TMP_ROOT}/live-d"
+STABLE_D="${TMP_ROOT}/live-d-stable"
+build_deb "podman-podman" "6.0.0~deb12.podman1" amd64 "${STABLE_D}" "podman-6"
+build_deb "podman-skopeo" "${SK_BOOKWORM}" amd64 "${STABLE_D}" "skopeo-published-bytes-DDDD"
+"${PROJECT_ROOT}/scripts/repo_manage.sh" stable bookworm "${STABLE_D}" "${LIVE_D}" >/dev/null
+add_byhash_and_resign stable-bookworm "${LIVE_D}" >/dev/null
+serve "${LIVE_D}" "stable-bookworm" || true
+published_sha="$(sha256sum "${STABLE_D}/podman-skopeo_${SK_BOOKWORM}_amd64.deb" | awk '{print $1}')"
+
+# The rebuild: podman moves on, skopeo is the same version with new bytes.
+NEW_D="${TMP_ROOT}/new-d"
+build_deb "podman-podman" "6.0.1~deb12.podman1" amd64 "${NEW_D}" "podman-6-0-1"
+build_deb "podman-skopeo" "${SK_BOOKWORM}" amd64 "${NEW_D}" "skopeo-REBUILT-with-other-bytes-EEEEEEEE"
+fresh_sha="$(sha256sum "${NEW_D}/podman-skopeo_${SK_BOOKWORM}_amd64.deb" | awk '{print $1}')"
+assert_equals "fixture: rebuild differs from the published skopeo" "yes" "$([[ "${fresh_sha}" != "${published_sha}" ]] && echo yes || echo no)"
+
+OUT_D="${TMP_ROOT}/out-d"
+mkdir -p "${OUT_D}"
+rc=0
+bash "${PROJECT_ROOT}/scripts/ci_publish.sh" stable bookworm "${NEW_D}" "${REPO_URL}" "${OUT_D}" \
+    > "${TMP_ROOT}/d.log" 2>&1 || rc=$?
+if [[ "${rc}" -ne 0 ]]; then
+    tail -25 "${TMP_ROOT}/d.log" | sed 's/^/      /'
+fi
+assert_equals "ci_publish stable exits 0" "0" "${rc}"
+assert_equals "published skopeo bytes adopted into the pool" "${published_sha}" \
+    "$(sha256sum "${OUT_D}/$(skopeo_filename bookworm)" | awk '{print $1}')"
+assert_equals "stable-bookworm podman advanced" "6.0.1~deb12.podman1" \
+    "$(pkg_version "${OUT_D}/dists/stable-bookworm/main/binary-amd64/Packages" podman-podman)"
+assert_equals "the adoption is logged" "yes" \
+    "$(grep -q 'adopting the published podman-skopeo' "${TMP_ROOT}/d.log" && echo yes || echo no)"
+assert_equals "input artifact dir left untouched" "${fresh_sha}" \
+    "$(sha256sum "${NEW_D}/podman-skopeo_${SK_BOOKWORM}_amd64.deb" | awk '{print $1}')"
 
 echo ""
 echo "========================================"
