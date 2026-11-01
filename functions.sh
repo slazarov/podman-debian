@@ -198,7 +198,29 @@ detect_runtime_depends() {
             # the caller's `set -euo pipefail`, a pipeline failure here could
             # otherwise abort with an opaque ERR-trap message before the
             # explicit guard below ever runs.
-            if ! dpkg_out="$(dpkg-query -S "${resolved}" 2>&1)"; then
+            #
+            # bookworm is usr-merged on disk, but its dpkg database still
+            # records many libraries under /lib (libc6 owns
+            # /lib/x86_64-linux-gnu/libc.so.6, not the /usr/lib path realpath
+            # returns). trixie moved those records to /usr. So if the resolved
+            # path has no owner, also try the path ldd printed and the same
+            # paths with the /usr prefix added or removed.
+            local lcandidate lfound=0
+            local -a lcandidates=( "${resolved}" "${lib}" )
+            for lcandidate in "${resolved}" "${lib}"; do
+                if [[ "${lcandidate}" == /usr/* ]]; then
+                    lcandidates+=( "${lcandidate#/usr}" )
+                else
+                    lcandidates+=( "/usr${lcandidate}" )
+                fi
+            done
+            for lcandidate in "${lcandidates[@]}"; do
+                if dpkg_out="$(dpkg-query -S "${lcandidate}" 2>&1)"; then
+                    lfound=1
+                    break
+                fi
+            done
+            if [[ "${lfound}" -eq 0 ]]; then
                 echo "ERROR: no owning package for ${lib} -> ${resolved} (linked by ${bin})" >&2
                 echo "  dpkg-query: ${dpkg_out}" >&2
                 return 1
