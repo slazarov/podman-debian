@@ -1,0 +1,39 @@
+# Build / packaging output (component sources clone into build/)
+build/
+log/
+output/
+
+# Downloaded archives / toolchains
+*.tar*
+*.zip*
+rustup*
+
+# Lima VM templates (machine-specific mount paths)
+lima/
+
+# Generated files
+ltmain.sh
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# AI tooling (machine-local — kept on disk, never committed)
+.claude/
+.opencode/
+.agents/
+.codex/
+_bmad/
+_bmad-output/
+harness-config.toml
+CLAUDE.local.md
+
+# Codanna / MCP caches
+.codanna/
+.codannaignore
+.fastembed_cache/

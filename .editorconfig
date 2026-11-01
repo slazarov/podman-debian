@@ -1,0 +1,28 @@
+# EditorConfig — https://editorconfig.org
+# Encodes the house style already followed across the pipeline.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Shell scripts: 4-space indent (matches functions.sh / build_*.sh)
+[*.sh]
+indent_style = space
+indent_size = 4
+
+# YAML (nFPM defs, GitHub workflows, lima): 2-space is the ecosystem norm
+[*.{yml,yaml}]
+indent_size = 2
+
+# Markdown: keep trailing whitespace (hard line breaks) and don't reflow
+[*.md]
+trim_trailing_whitespace = false
+
+# Makefiles require real tabs
+[Makefile]
+indent_style = tab

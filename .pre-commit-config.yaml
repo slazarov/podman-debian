@@ -1,0 +1,38 @@
+# Pre-commit hooks — https://pre-commit.com
+# Setup:  pipx install pre-commit && pre-commit install
+# Run over everything once:  pre-commit run --all-files
+#
+# These mirror the CI lint gate so problems surface before they reach a PR.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '\.md$'
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-executables-have-shebangs
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.10.0
+    hooks:
+      - id: shellcheck
+        # Uses .shellcheckrc. Block only on real breakage for now; tighten to
+        # `warning`/default as the existing 15 warnings get cleaned up.
+        args: [--severity=error]
+
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.10.0-1
+    hooks:
+      - id: shfmt
+        # 4-space indent, indent switch cases, redirect operators followed by a
+        # space — matches the house style encoded in .editorconfig.
+        args: [-i, '4', -ci, -sr, -w]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks

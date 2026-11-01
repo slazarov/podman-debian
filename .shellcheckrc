@@ -1,0 +1,12 @@
+# ShellCheck configuration — https://github.com/koalaman/shellcheck/wiki
+# Shared by local runs, pre-commit, and CI so results are consistent everywhere.
+
+# Follow `source`/`.` into other files when the path is resolvable. Scripts here
+# bootstrap `toolpath` then `source "${toolpath}/config.sh"`; enabling this lets
+# ShellCheck resolve those where possible instead of blanket SC1090/SC1091 noise.
+external-sources=true
+
+# SC1091: sourced file resolved via a runtime-computed ${toolpath} that ShellCheck
+# cannot follow statically. These are legitimate (config.sh/functions.sh exist);
+# suppress the "not following" info rather than sprinkle inline disables.
+disable=SC1091

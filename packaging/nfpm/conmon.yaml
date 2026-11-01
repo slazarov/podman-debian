@@ -1,0 +1,32 @@
+name: podman-conmon
+arch: "${ARCH}"
+platform: linux
+version: "${VERSION}"
+version_schema: none
+maintainer: "Podman Debian <noreply@github.com>"
+description: "OCI container runtime monitor (compiled from source)"
+vendor: "podman-debian"
+homepage: "https://github.com/containers/conmon"
+license: "Apache-2.0"
+section: admin
+priority: optional
+
+# System-library depends are injected at build time. The injected
+# fragment carries its own `depends:` header so a fully-static binary (empty
+# detected set) produces no depends: key at all rather than an empty one.
+${DETECTED_DEPENDS}
+
+conflicts:
+  - conmon
+
+replaces:
+  - conmon
+
+provides:
+  - conmon
+
+contents:
+  - src: "${DESTDIR}/usr/bin/conmon"
+    dst: /usr/bin/conmon
+    file_info:
+      mode: 0755

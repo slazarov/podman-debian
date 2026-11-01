@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "prose": {
+      "source": "cloudflare/computer",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/prose/SKILL.md",
+      "computedHash": "4e86bb10dd2fd85227037aaa3315728357fb2899d8c13f31b2006d0ae8cc8060"
+    }
+  }
+}

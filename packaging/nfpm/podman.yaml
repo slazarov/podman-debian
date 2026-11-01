@@ -1,0 +1,91 @@
+name: podman-podman
+arch: "${ARCH}"
+platform: linux
+version: "${VERSION}"
+version_schema: none
+maintainer: "Podman Debian <noreply@github.com>"
+description: "Container engine for OCI containers (compiled from source)"
+vendor: "podman-debian"
+homepage: "https://github.com/containers/podman"
+license: "Apache-2.0"
+section: admin
+priority: optional
+
+depends:
+  # Internal suite packages
+  - podman-crun
+  - podman-conmon
+  - podman-netavark
+  - podman-aardvark-dns
+  - podman-pasta
+  - podman-catatonit
+  - podman-container-configs
+  # newuidmap/newgidmap -- rootless Podman refuses to start without them
+  # ("command required for rootless mode with multiple IDs").
+  - uidmap
+  # System libraries detected from the binary and injected at build time.
+${DETECTED_DEPENDS}
+
+recommends:
+  # Kernel >= 5.13 runs rootless storage on native overlay; fuse-overlayfs is
+  # only needed for storage already created with it (.has-mount-program) or on
+  # filesystems native overlay can't back. Recommends keeps it for upgraders.
+  - podman-fuse-overlayfs
+
+conflicts:
+  - podman
+
+replaces:
+  - podman
+
+provides:
+  - podman
+
+contents:
+  - src: "${DESTDIR}/usr/bin/podman"
+    dst: /usr/bin/podman
+    file_info:
+      mode: 0755
+  - src: "${DESTDIR}/usr/bin/podman-remote"
+    dst: /usr/bin/podman-remote
+    file_info:
+      mode: 0755
+  # podmansh: login-shell entrypoint. Upstream `make install` creates it as a
+  # relative symlink (`ln -sf podman .../podmansh`); package it as a symlink so
+  # it isn't a duplicated copy of the podman binary. No file_info: mode is
+  # meaningless on a symlink (deb symlinks are always lrwxrwxrwx).
+  - src: podman
+    dst: /usr/bin/podmansh
+    type: symlink
+  - src: "${DESTDIR}/usr/libexec/podman/quadlet"
+    dst: /usr/libexec/podman/quadlet
+    file_info:
+      mode: 0755
+  - src: "${DESTDIR}/usr/libexec/podman/rootlessport"
+    dst: /usr/libexec/podman/rootlessport
+    file_info:
+      mode: 0755
+  # Man pages (podman-specific only; glob avoids pulling in other components' pages)
+  - src: "${DESTDIR}/usr/share/man/man1/podman*"
+    dst: /usr/share/man/man1/
+  # Man section 7 (podman-rootless, podman-troubleshooting)
+  - src: "${DESTDIR}/usr/share/man/man7/"
+    dst: /usr/share/man/man7/
+    type: tree
+  - src: "${DESTDIR}/usr/lib/systemd/"
+    dst: /usr/lib/systemd/
+    type: tree
+  # tmpfiles: exempts rootless runtime dirs in /tmp (podman-run-*, etc.) from
+  # systemd's 10-day age cleanup -- without it long-running rootless
+  # containers lose their state -- and clears them on reboot.
+  - src: "${DESTDIR}/usr/lib/tmpfiles.d/podman.conf"
+    dst: /usr/lib/tmpfiles.d/podman.conf
+    file_info:
+      mode: 0644
+  # Shell completions (podman-specific; glob avoids pulling in other components')
+  - src: "${DESTDIR}/usr/share/bash-completion/completions/podman*"
+    dst: /usr/share/bash-completion/completions/
+  - src: "${DESTDIR}/usr/share/fish/vendor_completions.d/podman*"
+    dst: /usr/share/fish/vendor_completions.d/
+  - src: "${DESTDIR}/usr/share/zsh/site-functions/_podman*"
+    dst: /usr/share/zsh/site-functions/

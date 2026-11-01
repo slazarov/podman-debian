@@ -1,0 +1,50 @@
+# Named podman-toolbx (upstream's "Toolbx" branding), NOT podman-toolbox:
+# Debian ships a package literally named podman-toolbox, and sharing that name
+# would let a Debian update with a higher version silently replace this one
+# (see docs/apt-repository.md).
+name: podman-toolbx
+arch: "${ARCH}"
+platform: linux
+version: "${VERSION}"
+version_schema: none
+maintainer: "Podman Debian <noreply@github.com>"
+description: "Tool for interactive command line environments on Linux (compiled from source)"
+vendor: "podman-debian"
+homepage: "https://github.com/containers/toolbox"
+license: "Apache-2.0"
+section: admin
+priority: optional
+
+depends:
+  - podman-podman
+
+# podman-toolbox is Debian's package with the same files. Unversioned, so apt
+# removes it when podman-toolbx comes in.
+conflicts:
+  - toolbox
+  - podman-toolbox
+
+replaces:
+  - toolbox
+  - podman-toolbox
+
+provides:
+  - toolbox
+
+contents:
+  - src: "${DESTDIR}/usr/bin/toolbox"
+    dst: /usr/bin/toolbox
+    file_info:
+      mode: 0755
+  # Man pages (toolbox-specific)
+  - src: "${DESTDIR}/usr/share/man/man1/toolbox*"
+    dst: /usr/share/man/man1/
+  # Shell completions (toolbox-specific)
+  # NOTE: bash completion should exist from meson install; fish/zsh may be
+  # added in later toolbox versions -- add glob entries when available.
+  - src: "${DESTDIR}/usr/share/bash-completion/completions/toolbox*"
+    dst: /usr/share/bash-completion/completions/
+  # Toolbox profile scripts
+  - src: "${DESTDIR}/usr/share/toolbox/"
+    dst: /usr/share/toolbox/
+    type: tree

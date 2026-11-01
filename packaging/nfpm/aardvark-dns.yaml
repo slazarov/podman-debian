@@ -1,0 +1,27 @@
+name: podman-aardvark-dns
+arch: "${ARCH}"
+platform: linux
+version: "${VERSION}"
+version_schema: none
+maintainer: "Podman Debian <noreply@github.com>"
+description: "Container DNS server for Podman networking (compiled from source)"
+vendor: "podman-debian"
+homepage: "https://github.com/containers/aardvark-dns"
+license: "Apache-2.0"
+section: admin
+priority: optional
+
+conflicts:
+  - aardvark-dns
+
+replaces:
+  - aardvark-dns
+
+provides:
+  - aardvark-dns
+
+contents:
+  - src: "${DESTDIR}/usr/libexec/podman/aardvark-dns"
+    dst: /usr/libexec/podman/aardvark-dns
+    file_info:
+      mode: 0755

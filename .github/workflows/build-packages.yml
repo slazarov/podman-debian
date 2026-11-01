@@ -1,0 +1,500 @@
+name: Build and Publish Packages
+
+on:
+  schedule:
+    # One cron per auto-updating track; the firing cron selects the track (see the
+    # resolve-track job). Staggered so the "pages" concurrency group serializes them.
+    - cron: '30 4 * * *'  # 04:30 UTC — nightly (upstream HEAD)
+    - cron: '30 5 * * *'  # 05:30 UTC — stable  (Podman 6.x, series-cap + soak)
+    - cron: '30 6 * * *'  # 06:30 UTC — v5      (Podman 5.x maintenance, series-cap + soak)
+  workflow_dispatch:
+    inputs:
+      build_track:
+        description: 'Build track (stable = Podman 6.x, v5 = Podman 5.x maintenance, nightly = upstream HEAD)'
+        required: true
+        type: choice
+        options:
+          - stable
+          - v5
+          - nightly
+        default: stable
+      force_rebuild:
+        description: 'Force a stable/v5 rebuild even when no pinned version changed (bypasses the republish guard). Use to republish after a packaging-only change. Ignored on nightly (already unguarded on dispatch).'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  # ============================================
+  # Resolve which track this run builds
+  # ============================================
+  # Single source of truth for the track and the build matrix, consumed by
+  # every downstream job. A manual dispatch uses its input; a scheduled run
+  # maps the firing cron string (github.event.schedule) to a track.
+  resolve-track:
+    runs-on: ubuntu-24.04
+    outputs:
+      track: ${{ steps.pick.outputs.track }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The build matrix (one cell per Debian release) comes from the distro
+      # table in config.sh, so the workflow never lists distros itself.
+      - name: Build matrix from config.sh
+        id: matrix
+        run: |
+          MATRIX="$(./scripts/ci_matrix.sh)"
+          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
+          echo "Build matrix: ${MATRIX}"
+
+      - name: Pick track
+        id: pick
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TRACK="${{ inputs.build_track }}"
+          else
+            case "${{ github.event.schedule }}" in
+              '30 4 * * *') TRACK="nightly" ;;
+              '30 5 * * *') TRACK="stable" ;;
+              '30 6 * * *') TRACK="v5" ;;
+              # Fail loud rather than silently building+publishing the wrong track
+              # if a cron is ever added/edited without updating this map.
+              *) echo "::error::unmapped schedule '${{ github.event.schedule }}' — add it to resolve-track"; exit 1 ;;
+            esac
+          fi
+          echo "track=${TRACK}" >> "$GITHUB_OUTPUT"
+          echo "Resolved track: ${TRACK}"
+
+  # ============================================
+  # Check if upstream components changed (nightly cron only)
+  # ============================================
+  # HEAD-SHA guard for the NIGHTLY cron only (nightly builds from upstream HEAD).
+  # Gated to the 04:30 cron specifically so the stable/v5 crons — which are guarded
+  # by check-republish instead — never trip this nightly-semantics short-circuit.
+  check-changes:
+    if: github.event_name == 'schedule' && github.event.schedule == '30 4 * * *'
+    runs-on: ubuntu-24.04
+    outputs:
+      skip: ${{ steps.detect.outputs.skip }}
+    steps:
+      - name: Restore last-known SHAs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /tmp/nightly-sha.json
+          key: nightly-sha-v1-${{ github.run_number }}
+          restore-keys: |
+            nightly-sha-v1-
+
+      - name: Detect upstream changes
+        id: detect
+        run: |
+          SHA_FILE="/tmp/nightly-sha.json"
+          OLD_SHAS=$(cat "$SHA_FILE" 2>/dev/null || echo "{}")
+
+          declare -A REPOS
+          REPOS[podman]="https://github.com/containers/podman.git"
+          REPOS[buildah]="https://github.com/containers/buildah.git"
+          REPOS[crun]="https://github.com/containers/crun.git"
+          REPOS[conmon]="https://github.com/containers/conmon"
+          REPOS[netavark]="https://github.com/containers/netavark"
+          REPOS[aardvark-dns]="https://github.com/containers/aardvark-dns"
+          REPOS[skopeo]="https://github.com/containers/skopeo.git"
+          REPOS[fuse-overlayfs]="https://github.com/containers/fuse-overlayfs.git"
+          REPOS[catatonit]="https://github.com/openSUSE/catatonit.git"
+          REPOS[container-libs]="https://github.com/containers/container-libs.git"
+          REPOS[pasta]="https://passt.top/passt"
+          REPOS[go-md2man]="https://github.com/cpuguy83/go-md2man.git"
+          REPOS[toolbox]="https://github.com/containers/toolbox.git"
+
+          CHANGED=""
+          NEW_SHAS="{"
+          FIRST=true
+
+          for comp in "${!REPOS[@]}"; do
+            HEAD_SHA=$(git ls-remote "${REPOS[$comp]}" HEAD 2>/dev/null | awk '{print $1}' | head -1 || echo "unknown")
+            OLD_SHA=$(echo "$OLD_SHAS" | grep -o "\"${comp}\":\"[^\"]*\"" | head -1 | sed 's/.*:"//;s/".*//')
+
+            if [[ -z "$OLD_SHA" || "$HEAD_SHA" != "$OLD_SHA" ]]; then
+              CHANGED="${CHANGED}  ${comp}: ${OLD_SHA:-<new>} -> ${HEAD_SHA}\n"
+            fi
+
+            [[ "$FIRST" == true ]] && FIRST=false || NEW_SHAS+=","
+            NEW_SHAS+="\"${comp}\":\"${HEAD_SHA}\""
+          done
+
+          NEW_SHAS+="}"
+          echo "$NEW_SHAS" > "$SHA_FILE"
+
+          if [[ -n "$CHANGED" ]]; then
+            echo -e "Changes detected:\n$CHANGED"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "No upstream changes detected. Skipping build."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ============================================
+  # Republish guard (stable/v5 — dispatch or cron)
+  # ============================================
+  # Both auto-updating tracks (stable, v5) would otherwise rebuild and
+  # republish every distro even when nothing changed. This job short-circuits the run when every component is
+  # already published at the version resolve_versions.sh would build (pasta is
+  # excluded — it floats by date; see scripts/check_republish_needed.sh). It is
+  # strictly conservative for the deb comparison (any fetch uncertainty yields
+  # skip=false), but a resolver HOLD yields skip=true (nothing valid to build).
+  # Nightly is untouched — check-changes guards its scheduled run.
+  check-republish:
+    needs: [resolve-track]
+    if: needs.resolve-track.outputs.track == 'stable' || needs.resolve-track.outputs.track == 'v5'
+    runs-on: ubuntu-24.04
+    outputs:
+      skip: ${{ steps.guard.outputs.skip }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Compare resolved versions against the live repository
+        id: guard
+        run: |
+          REPO_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          ./scripts/check_republish_needed.sh "${{ needs.resolve-track.outputs.track }}" "${REPO_URL}"
+
+  # ============================================
+  # Build every distro in one matrix
+  # ============================================
+  # One cell per Debian release, generated from config.sh by resolve-track.
+  # Every cell runs in a clean Debian container on a GitHub-hosted amd64
+  # runner (the runner only hosts the container). fail-fast: false, so a
+  # trixie failure does not abort the bookworm build. Go cache keys and
+  # artifact names carry the distro, so one distro's cache or packages never
+  # end up in another's build or publish.
+  build:
+    needs: [resolve-track, check-changes, check-republish]
+    # Gate order: check-changes guards the nightly cron; check-republish guards the
+    # stable/v5 tracks (dispatch or cron). A SKIPPED guard job yields an empty
+    # output, and '' != 'true', so neither guard blocks a run it doesn't apply to.
+    # (Stable/v5 crons skip check-changes -> its '' passes the first clause, and
+    # check-republish gates them; the nightly cron skips check-republish likewise.)
+    # The `force_rebuild` dispatch input overrides the republish guard so a
+    # packaging-only change (no pinned-version bump) can still be republished; it
+    # is null on cron/push, so it only ever loosens a manual dispatch.
+    if: >-
+      always()
+      && needs.resolve-track.result == 'success'
+      && (github.event_name == 'workflow_dispatch' || needs.check-changes.outputs.skip != 'true')
+      && (needs.check-republish.outputs.skip != 'true' || inputs.force_rebuild)
+    runs-on: ubuntu-24.04
+    container: ${{ matrix.container }}
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.resolve-track.outputs.matrix) }}
+    steps:
+      # The Debian images start as root without the tooling the steps below
+      # need (sudo, git, curl, ca-certificates). setup.sh and
+      # install_dependencies.sh install the actual build dependencies; this
+      # only bootstraps enough to reach setup.sh. The apt drop-in adds retries
+      # and a timeout so a transient mirror hiccup does not fail the build; it
+      # stays in place for setup.sh's apt-get install too.
+      - name: Bootstrap container prerequisites
+        run: |
+          printf '%s\n' 'Acquire::Retries "8";' 'Acquire::http::Timeout "30";' \
+            > /etc/apt/apt.conf.d/99-ci-resilient
+          apt-get update
+          apt-get install -y --no-install-recommends sudo git curl ca-certificates
+
+      # /dev/fuse in the build container: the job container is created without
+      # --device /dev/fuse. mknod'ing the node inside the container succeeds
+      # (Docker's default device cgroup allows `c *:* m`) but read/write on
+      # 10:229 stays denied by the device cgroup, which the kernel consults on
+      # every permission check of a device inode, even for root. So setup.sh's
+      # FUSE check ([[ -r /dev/fuse ]]) can never pass here. Compilation never
+      # opens /dev/fuse (it is a runtime-only requirement of fuse-overlayfs),
+      # so the build step sets SKIP_FUSE_CHECK=true instead of creating the node.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The version-suffix ordering is a packaging contract (bookworm < trixie,
+      # nightly < tagged, revision bumps upgrade). Check it before spending
+      # two hours on a build.
+      - name: Check version ordering
+        run: ./scripts/verify_versions.sh
+
+      - name: Resolve build track
+        id: track
+        run: |
+          TRACK="${{ needs.resolve-track.outputs.track }}"
+          echo "track=${TRACK}" >> "$GITHUB_OUTPUT"
+          echo "Build track: ${TRACK}"
+
+      - name: Cache Go modules and build cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-mod
+            ~/.cache/go-build
+          # The distro in the key keeps each release's cache separate.
+          key: go-${{ matrix.distro }}-${{ steps.track.outputs.track }}-${{ github.run_number }}
+          restore-keys: |
+            go-${{ matrix.distro }}-${{ steps.track.outputs.track }}-
+            go-${{ matrix.distro }}-
+
+      - name: Build all components
+        run: |
+          DESTDIR="${{ runner.temp }}/podman-staging"
+          mkdir -p "$DESTDIR"
+          # Ensure Go cache dirs exist and are writable by root
+          mkdir -p "$HOME/.cache/go-build" "$HOME/.cache/go-mod"
+          # Build env args for sudo env (bypasses env_reset completely)
+          # Point Go caches to runner-accessible paths for actions/cache compatibility
+          ENV_ARGS="DEBIAN_FRONTEND=noninteractive DESTDIR=$DESTDIR"
+          ENV_ARGS="$ENV_ARGS GOCACHE=$HOME/.cache/go-build GOMODCACHE=$HOME/.cache/go-mod"
+          # Pass the matrix distro as the DISTRO override so config.sh composes
+          # VERSION_SUFFIX=~deb{VERSION_ID}.podman{N} for this cell. config.sh
+          # rejects anything that is not in its distro table.
+          ENV_ARGS="$ENV_ARGS DISTRO=${{ matrix.distro }}"
+          # /dev/fuse is unusable inside the job container (see the note above
+          # the checkout step). Nothing opens it during compilation, and the
+          # FUSE preflight check is only a warning anyway; SKIP_FUSE_CHECK=true
+          # marks this as a build-only environment.
+          ENV_ARGS="$ENV_ARGS SKIP_FUSE_CHECK=true"
+          TRACK="${{ steps.track.outputs.track }}"
+          if [[ "$TRACK" == "stable" || "$TRACK" == "v5" ]]; then
+            # Materialize concrete *_TAG values from the track policy (series-cap +
+            # soak + buildah-derive). Resolver exit codes: 0 ok; 3 = deterministic
+            # hold (nothing soaked yet, upstream reachable) -> nothing to build,
+            # exit the step cleanly; other non-zero = uncertain/error -> fail loud.
+            if RESOLVED="$(./scripts/resolve_versions.sh "versions-${TRACK}.env")"; then
+              while IFS= read -r line; do
+                [[ "$line" =~ ^[[:space:]]*# || -z "$line" ]] && continue
+                line="${line#export }"
+                key="${line%%=*}"
+                val="${line#*=}"
+                val="${val%\"}"
+                val="${val#\"}"
+                ENV_ARGS="$ENV_ARGS ${key}=${val}"
+              done <<< "$RESOLVED"
+            else
+              rc=$?
+              if [[ "$rc" -eq 3 ]]; then
+                echo "Resolver: no soaked target yet for ${TRACK}; nothing to build."
+                exit 0
+              fi
+              echo "::error::resolver failed for ${TRACK} (rc=$rc)"; exit "$rc"
+            fi
+          elif [[ "$TRACK" == "nightly" ]]; then
+            ENV_ARGS="$ENV_ARGS NIGHTLY_BUILD=true SHALLOW_CLONE=false"
+          fi
+          sudo env $ENV_ARGS ./setup.sh
+          # Fix ownership so actions/cache can save the Go caches
+          sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/go-build" "$HOME/.cache/go-mod"
+        timeout-minutes: 150
+
+      - name: Debug DESTDIR contents
+        if: always()
+        run: |
+          DESTDIR="${{ runner.temp }}/podman-staging"
+          echo "=== DESTDIR tree (directories) ==="
+          find "$DESTDIR" -type d 2>/dev/null | head -50 || echo "DESTDIR not found or empty"
+          echo ""
+          echo "=== DESTDIR files (binaries) ==="
+          find "$DESTDIR" -type f -name '*.so*' -o -type f -perm /111 2>/dev/null | head -50 || echo "No binaries found"
+          echo ""
+          echo "=== DESTDIR usr/bin/ ==="
+          ls -la "$DESTDIR/usr/bin/" 2>/dev/null || echo "usr/bin/ does not exist"
+          echo ""
+          echo "=== DESTDIR total file count ==="
+          # `|| echo 0` — under bash -o pipefail a missing DESTDIR would fail
+          # the pipeline, and this step runs if: always() (i.e. after failures
+          # when DESTDIR may not exist).
+          find "$DESTDIR" -type f 2>/dev/null | wc -l || echo 0
+
+      - name: Install nFPM
+        run: |
+          # Use Go installed by setup.sh
+          export PATH="/opt/go/$(ls /opt/go/)/bin:$HOME/go/bin:$PATH"
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.45.0
+
+      - name: Package all components
+        run: |
+          # Same DISTRO override, so package_all.sh composes the same
+          # per-distro VERSION_SUFFIX and the .deb filenames carry
+          # ~deb{VERSION_ID}.podman{N} for this cell.
+          export DISTRO="${{ matrix.distro }}"
+          export PATH="/opt/go/$(ls /opt/go/)/bin:$HOME/go/bin:$PATH"
+          export DESTDIR="${{ runner.temp }}/podman-staging"
+          if [[ "${{ steps.track.outputs.track }}" == "nightly" ]]; then
+            export NIGHTLY_BUILD=true
+          fi
+          ./scripts/package_all.sh
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          # One artifact per distro: debs-bookworm, debs-trixie.
+          name: debs-${{ matrix.distro }}
+          path: output/*.deb
+          # The publish job consumes these within the same run; retention only
+          # serves post-hoc debugging. Kept short so daily nightly builds don't
+          # accumulate ~30 days of .deb artifacts in Actions storage.
+          retention-days: 7
+
+  # ============================================
+  # Publish APT repository to GitHub Pages
+  # ============================================
+  # Runs when at least one build cell succeeded. needs.build.result is
+  # 'success' when every cell passed and 'failure' when some failed
+  # (fail-fast: false); 'cancelled' or 'skipped' means no build ran. A distro
+  # whose cell failed has no artifact: publish_distro skips it, and its suites
+  # are carried over unchanged from the live repo by the other distro's
+  # ci_publish.sh pass. If no distro published at all, the job fails before
+  # deploying. The repo is assembled completely in repo-output and deployed
+  # to Pages in one step, so the live repo is replaced whole or not at all.
+  publish:
+    needs: [resolve-track, build]
+    if: always() && github.ref == 'refs/heads/main' && (needs.build.result == 'success' || needs.build.result == 'failure')
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run doc and HTML unit tests
+        run: |
+          bash tests/test_docs_suites.sh
+          bash tests/test_index_html_distro.sh
+
+      - name: Resolve build track
+        id: track
+        run: |
+          TRACK="${{ needs.resolve-track.outputs.track }}"
+          echo "track=${TRACK}" >> "$GITHUB_OUTPUT"
+          echo "Build track: ${TRACK}"
+
+      # Each distro's artifact downloads into its own directory
+      # (artifacts/debs-bookworm/, artifacts/debs-trixie/): no merge-multiple,
+      # so packages built for one release can never land in another's publish.
+      # A failed cell has no artifact; that distro's directory is missing.
+      - name: Download build artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true
+        with:
+          pattern: debs-*
+          path: artifacts/
+
+      - name: Install reprepro
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y reprepro
+
+      # Gate the publish on the repo-assembly regression tests. These drive the
+      # real ci_publish.sh / repo_manage.sh hermetically (throwaway GPG, temp
+      # dirs, a local mock HTTP repo); they never touch the live repo or deploy.
+      # test_ci_publish_multipass reproduces the two-pass cross-distro clobber
+      # (the trixie pass overwriting the bookworm pass's fresh suites); a
+      # regression here blocks deploy.
+      - name: Run repo-assembly regression tests
+        run: |
+          bash tests/test_repo_assemble_byhash.sh
+          bash tests/test_ci_publish_multipass.sh
+          bash tests/test_ci_publish_shared_pool.sh
+          bash tests/test_verify_repo_integrity.sh
+
+      # Per-distro sequential publish into ONE accumulating repo-output, in
+      # VALID_DISTROS order (config.sh). ci_publish.sh's mirror-then-include
+      # model (OTHER_SUITES = ALL_SUITES minus PUBLISH_TARGETS) re-mirrors
+      # non-target suites from the live repo, EXCEPT any suite an earlier pass
+      # already put into repo-output. Those are kept in place so a later pass
+      # cannot clobber an earlier pass's freshly built suites.
+      - name: Build and publish repository
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          REPO_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          TRACK="${{ steps.track.outputs.track }}"
+          eval "$(sed -n '/^VALID_TRACKS=/,/^unset _distro _track$/p' config.sh)"
+
+          # publish_distro <distro> <deb-dir>: skip (with a logged message) if
+          # the distro's artifact dir holds no .deb files, which is what a
+          # failed build cell leaves behind. ci_publish.sh hard-fails on an
+          # empty deb dir, and one failed distro must not block the others.
+          published=0
+          publish_distro() {
+            local label="$1"
+            local deb_dir="$2"
+            local count
+            count=$(find "${deb_dir}" -maxdepth 1 -name '*.deb' -type f 2>/dev/null | wc -l)
+            if [[ "${count}" -eq 0 ]]; then
+              echo "::warning::no .deb files in ${deb_dir}; skipping ci_publish.sh for ${label}"
+              return 0
+            fi
+            echo ">>> Publishing ${label} (${count} debs from ${deb_dir})"
+            ./scripts/ci_publish.sh "${TRACK}" "${label}" "${deb_dir}" "${REPO_URL}" "repo-output"
+            published=$((published + 1))
+          }
+
+          for distro in "${VALID_DISTROS[@]}"; do
+            publish_distro "${distro}" "artifacts/debs-${distro}"
+          done
+
+          if [[ "${published}" -eq 0 ]]; then
+            echo "::error::no distro produced packages; refusing to deploy"
+            exit 1
+          fi
+
+      # Integrity gate (explicit, on the fully-assembled repo). ci_publish.sh
+      # already runs verify_repo_integrity.sh at the end of each pass; re-run it
+      # here over the final combined repo-output as the last checkpoint before the
+      # Pages upload. Asserts every suite's signed index matches Release AND the
+      # pool .debs it advertises, the guardrail against the "File has unexpected
+      # size" shared-pool overwrite bug. A mismatch fails the job and no partial or
+      # inconsistent repository is ever deployed.
+      - name: Verify repository integrity before publish
+        run: ./scripts/verify_repo_integrity.sh "$PWD/repo-output"
+
+      # Installability smoke gate. Runs after every ci_publish.sh pass
+      # (repo-output is fully assembled and signed) and before the Pages
+      # upload, so an uninstallable package never reaches the live repo. For
+      # each distro with a suite for this track in repo-output, it runs the
+      # fresh / migrate-from-distro / upgrade-from-live scenarios against the
+      # assembled file:// repo in a clean Debian container. The helper exits 1
+      # on failure, which stops the job before configure-pages,
+      # upload-pages-artifact and deploy-pages. It runs on every publish
+      # (stable/v5/nightly).
+      - name: Smoke test, install podman-suite from the assembled repo per distro
+        run: |
+          set -euo pipefail
+          TRACK="${{ steps.track.outputs.track }}"
+          LIVE_REPO_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          export TRACK LIVE_REPO_URL
+          eval "$(sed -n '/^VALID_TRACKS=/,/^unset _distro _track$/p' config.sh)"
+          echo ">>> Running smoke gate for track ${TRACK}"
+          for distro in "${VALID_DISTROS[@]}"; do
+            if [[ -d "$PWD/repo-output/dists/${TRACK}-${distro}" ]]; then
+              ./scripts/smoke_repo_install.sh "${distro}" "$PWD/repo-output"
+            else
+              echo ">>> Skipping ${distro} smoke: ${TRACK}-${distro} is not in repo-output (its build may have failed)"
+            fi
+          done
+
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
+
+      # Every distro is assembled into repo-output before this single Pages
+      # deploy. The live repository is replaced in one step or not at all.
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        with:
+          path: repo-output/
+
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5

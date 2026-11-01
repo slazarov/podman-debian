@@ -1,0 +1,51 @@
+name: podman-pasta
+arch: "${ARCH}"
+platform: linux
+version: "${VERSION}"
+version_schema: none
+maintainer: "Podman Debian <noreply@github.com>"
+description: "User-mode networking for rootless containers (compiled from source)"
+vendor: "podman-debian"
+homepage: "https://passt.top/"
+license: "GPL-2.0-or-later"
+section: admin
+priority: optional
+
+# System-library depends are injected at build time. The injected
+# fragment carries its own `depends:` header so a fully-static binary (empty
+# detected set) produces no depends: key at all rather than an empty one.
+${DETECTED_DEPENDS}
+
+conflicts:
+  - passt
+
+replaces:
+  - passt
+
+provides:
+  - passt
+
+contents:
+  - src: "${DESTDIR}/usr/bin/passt"
+    dst: /usr/bin/passt
+    file_info:
+      mode: 0755
+  - src: "${DESTDIR}/usr/bin/pasta"
+    dst: /usr/bin/pasta
+    file_info:
+      mode: 0755
+  # pesto: client to view/update port-forwarding on a running passt/pasta.
+  - src: "${DESTDIR}/usr/bin/pesto"
+    dst: /usr/bin/pesto
+    file_info:
+      mode: 0755
+  # passt-repair: privileged helper for TCP-connection migration.
+  - src: "${DESTDIR}/usr/bin/passt-repair"
+    dst: /usr/bin/passt-repair
+    file_info:
+      mode: 0755
+  # NOTE: the x86_64-only passt.avx2 / pasta.avx2 fast-path variants are NOT
+  # listed here — nFPM errors on a src glob matching zero files and this manifest
+  # is arch-shared. package_all.sh appends them to the rendered config only when
+  # they exist (see the pasta AVX2 block there). passt re-execs into .avx2 at
+  # runtime when the CPU supports AVX2, falling back cleanly if absent.

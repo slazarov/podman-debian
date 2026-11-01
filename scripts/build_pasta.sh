@@ -1,0 +1,85 @@
+#!/bin/bash
+
+# Abort on Error
+set -euo pipefail
+
+# Determine toolpath if not set already
+relativepath="../" # Define relative path to go from this script to the root level of the tool
+if [[ ! -v toolpath ]]; then scriptpath=$(cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd ); toolpath=$(realpath --canonicalize-missing ${scriptpath}/${relativepath}); fi
+
+# Load Configuration
+source "${toolpath}/config.sh"
+
+# Load Functions
+source "${toolpath}/functions.sh"
+
+# Set error trap AFTER sourcing
+trap 'error_handler $? $LINENO "$BASH_SOURCE"' ERR
+
+# Change Folder to Build Root
+cd "${BUILD_ROOT}" || exit
+
+# Initialize build logging
+log_build_output "pasta"
+
+step_start "Cloning repository"
+git_clone_update git://passt.top/passt passt
+cd "${BUILD_ROOT}/passt"
+git fetch --all
+git fetch --tags
+git pull
+step_done
+
+step_start "Saving version"
+export GIT_CHECKED_OUT_TAG=$(date +"%Y%m%d")
+step_done
+
+step_start "Logging version"
+log_component "pasta"
+step_done
+
+step_start "Configuring ccache"
+# Enable ccache for C build caching when configured
+if [[ "${CCACHE_ENABLED:-false}" == "true" ]] && command -v ccache &>/dev/null; then
+    export CC="ccache gcc"
+    echo "  ccache enabled for C compilation"
+fi
+step_done
+
+step_start "Building"
+run_logged make -j "$NPROC"
+step_done
+
+step_start "Installing"
+if [[ -n "${DESTDIR:-}" ]]; then
+    install -D -m 0755 passt "${DESTDIR}/usr/bin/passt"
+    [[ -f passt.avx2 ]] && install -D -m 0755 passt.avx2 "${DESTDIR}/usr/bin/passt.avx2"
+    install -D -m 0755 pasta "${DESTDIR}/usr/bin/pasta"
+    [[ -f pasta.avx2 ]] && install -D -m 0755 pasta.avx2 "${DESTDIR}/usr/bin/pasta.avx2"
+    # pesto (live port-forward reconfig) and passt-repair (TCP-migration helper)
+    # are core BASEBIN members built on every arch — install unconditionally,
+    # exactly like passt/pasta, so staging, the manifest, and COMPONENT_BINARIES
+    # stay consistent. If upstream ever drops one, this fails loud here (at the
+    # source) rather than as a confusing downstream nFPM abort.
+    install -D -m 0755 pesto "${DESTDIR}/usr/bin/pesto"
+    install -D -m 0755 passt-repair "${DESTDIR}/usr/bin/passt-repair"
+else
+    # Kill current running processes (ignore errors)
+    shopt -qo errexit
+    current_error_setting=$?
+    set +e
+    ps aux | grep pasta | grep -v "bash" | awk '{print $2}' | xargs -r -n 1 kill -9 || true
+    if [ ${current_error_setting} -eq 0 ]; then set -e; fi
+
+    sudo install -D -m 0755 passt /usr/bin/passt
+    [[ -f passt.avx2 ]] && sudo install -D -m 0755 passt.avx2 /usr/bin/passt.avx2
+    sudo install -D -m 0755 pasta /usr/bin/pasta
+    [[ -f pasta.avx2 ]] && sudo install -D -m 0755 pasta.avx2 /usr/bin/pasta.avx2
+    sudo install -D -m 0755 pesto /usr/bin/pesto
+    sudo install -D -m 0755 passt-repair /usr/bin/passt-repair
+
+    # Remove files that shouldn't have been previously installed
+    rm -f /usr/local/bin/passt.1 /usr/local/bin/passt.c /usr/local/bin/passt.h
+    rm -f /usr/local/bin/pasta.1 /usr/local/bin/pasta.c /usr/local/bin/pasta.h
+fi
+step_done

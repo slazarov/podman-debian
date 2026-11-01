@@ -1,0 +1,69 @@
+name: lint
+
+# Fast quality gate on every push and PR. The heavier reprepro/gpg integration
+# harnesses run in the publish job of build-packages.yml; here we run ShellCheck,
+# an informational shfmt diff, and the portable bash unit tests.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Blocking, but scoped to real breakage (severity=error) so it is green
+      # today; tighten to `warning` then default as existing warnings are fixed.
+      # Reads .shellcheckrc from the repo root (external-sources, SC1091 off).
+      - name: ShellCheck
+        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
+        with:
+          severity: error
+
+  shfmt:
+    name: shfmt (informational)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Not blocking yet — surfaces formatting drift against the house style
+      # (.editorconfig / .pre-commit-config.yaml). Promote to blocking after a
+      # one-time `shfmt -w` normalization pass.
+      - name: shfmt diff
+        continue-on-error: true
+        run: docker run --rm -v "${PWD}:/w" -w /w mvdan/shfmt:v3.10.0 -i 4 -ci -sr -d .
+
+  tests:
+    name: bash unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run tests/*.sh
+        run: |
+          fail=0
+          for t in tests/test_*.sh; do
+            echo "::group::${t}"
+            bash "${t}" || fail=1
+            echo "::endgroup::"
+          done
+          exit "${fail}"
+
+  gitleaks:
+    name: gitleaks (secret scan, informational)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0   # full history so the scan covers past commits
+      # Informational until the first run confirms history is clean — the repo's
+      # early experimental phase could surface findings. Once green, drop
+      # continue-on-error to make it blocking (and add a .gitleaksignore for any
+      # reviewed false positives). pre-commit runs gitleaks on staged changes.
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

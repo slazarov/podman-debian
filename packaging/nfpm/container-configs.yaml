@@ -1,0 +1,64 @@
+name: podman-container-configs
+arch: "${ARCH}"
+platform: linux
+version: "${VERSION}"
+version_schema: none
+maintainer: "Podman Debian <noreply@github.com>"
+description: "Container configuration files for Podman ecosystem"
+vendor: "podman-debian"
+homepage: "https://github.com/containers/container-libs"
+license: "Apache-2.0"
+section: admin
+priority: optional
+
+# Debian splits these files across two packages: golang-github-containers-image
+# owns /etc/containers/registries.conf, -common owns the rest. Missing either
+# here makes dpkg abort with "trying to overwrite" when migrating from distro podman.
+conflicts:
+  - golang-github-containers-common
+  - golang-github-containers-image
+
+replaces:
+  - golang-github-containers-common
+  - golang-github-containers-image
+
+provides:
+  - golang-github-containers-common
+  - golang-github-containers-image
+
+contents:
+  # conffiles -- user modifications preserved on upgrade
+  - src: "${DESTDIR}/etc/containers/containers.conf"
+    dst: /etc/containers/containers.conf
+    type: config
+    file_info:
+      mode: 0644
+  - src: "${DESTDIR}/etc/containers/policy.json"
+    dst: /etc/containers/policy.json
+    type: config
+    file_info:
+      mode: 0644
+  - src: "${DESTDIR}/etc/containers/registries.conf"
+    dst: /etc/containers/registries.conf
+    type: config
+    file_info:
+      mode: 0644
+  - src: "${DESTDIR}/etc/containers/storage.conf"
+    dst: /etc/containers/storage.conf
+    type: config
+    file_info:
+      mode: 0644
+  - src: "${DESTDIR}/etc/containers/registries.d/default.yaml"
+    dst: /etc/containers/registries.d/default.yaml
+    type: config
+    file_info:
+      mode: 0644
+  # Data file -- NOT a conffile, overwritten on upgrade (upstream changes wanted)
+  - src: "${DESTDIR}/usr/share/containers/seccomp.json"
+    dst: /usr/share/containers/seccomp.json
+    file_info:
+      mode: 0644
+  # Man pages from container-libs (section 5)
+  - src: "${DESTDIR}/usr/share/man/man5/"
+    dst: /usr/share/man/man5/
+    type: tree

@@ -1,0 +1,54 @@
+name: Bug report
+description: A package that does not install or run, or a build, CI or repository failure
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For security issues, use private reporting instead (see SECURITY.md).
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Installing packages from the APT repository
+        - Building from source (setup.sh / build_*.sh)
+        - Packaging (.deb / nFPM)
+        - CI / publish
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: distro
+    attributes:
+      label: Debian release
+      options:
+        - Debian 12 (bookworm)
+        - Debian 13 (trixie)
+    validations:
+      required: true
+  - type: dropdown
+    id: track
+    attributes:
+      label: Track
+      options: [stable, v5, nightly, "n/a (building from source)"]
+    validations:
+      required: true
+  - type: input
+    id: package-version
+    attributes:
+      label: Package or component version
+      placeholder: "e.g. podman-podman 6.0.0~deb13.podman1"
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: apt errors, the end of the build log, `podman info`, and so on.
+      render: shell

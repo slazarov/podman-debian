@@ -1,0 +1,38 @@
+name: podman-buildah
+arch: "${ARCH}"
+platform: linux
+version: "${VERSION}"
+version_schema: none
+maintainer: "Podman Debian <noreply@github.com>"
+description: "OCI image builder (compiled from source)"
+vendor: "podman-debian"
+homepage: "https://github.com/containers/buildah"
+license: "Apache-2.0"
+section: admin
+priority: optional
+
+depends:
+  - podman-container-configs
+  # System libraries detected from the binary and injected at build time.
+${DETECTED_DEPENDS}
+
+conflicts:
+  - buildah
+
+replaces:
+  - buildah
+
+provides:
+  - buildah
+
+contents:
+  - src: "${DESTDIR}/usr/bin/buildah"
+    dst: /usr/bin/buildah
+    file_info:
+      mode: 0755
+  # Man pages (buildah-specific only; glob avoids pulling in other components' pages)
+  - src: "${DESTDIR}/usr/share/man/man1/buildah*"
+    dst: /usr/share/man/man1/
+  # Shell completions (buildah-specific)
+  - src: "${DESTDIR}/usr/share/bash-completion/completions/buildah*"
+    dst: /usr/share/bash-completion/completions/

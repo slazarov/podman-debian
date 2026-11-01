@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "kindly-web-search": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/Shelpuk-AI-Technology-Consulting/kindly-web-search-mcp-server",
+        "kindly-web-search-mcp-server",
+        "start-mcp-server"
+      ],
+      "env": {
+        "TAVILY_API_KEY": "${TAVILY_API_KEY}",
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}",
+        "KINDLY_BROWSER_EXECUTABLE_PATH": "${KINDLY_BROWSER_EXECUTABLE_PATH}"
+      }
+    }
+  }
+}

@@ -1,0 +1,39 @@
+name: podman-netavark
+arch: "${ARCH}"
+platform: linux
+version: "${VERSION}"
+version_schema: none
+maintainer: "Podman Debian <noreply@github.com>"
+description: "Container network stack for Podman (compiled from source)"
+vendor: "podman-debian"
+homepage: "https://github.com/containers/netavark"
+license: "Apache-2.0"
+section: admin
+priority: optional
+
+# nftables: netavark 2.x's only firewall driver. iptables: netavark 1.x (v5
+# track) is built with its upstream default driver, iptables, and fails with
+# "iptables: No such file or directory" without it. Drop iptables once v5 retires.
+depends:
+  - podman-container-configs
+  - nftables
+  - iptables
+
+conflicts:
+  - netavark
+
+replaces:
+  - netavark
+
+provides:
+  - netavark
+
+contents:
+  - src: "${DESTDIR}/usr/libexec/podman/netavark"
+    dst: /usr/libexec/podman/netavark
+    file_info:
+      mode: 0755
+  - src: "${DESTDIR}/usr/bin/netavark-dhcp-proxy-client"
+    dst: /usr/bin/netavark-dhcp-proxy-client
+    file_info:
+      mode: 0755

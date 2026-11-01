@@ -1,0 +1,53 @@
+Origin: podman-debian
+Label: Podman Debian
+Suite: stable-bookworm
+Codename: stable-bookworm
+Architectures: amd64
+Components: main
+Description: Podman built from source for Debian 12 (bookworm), Podman 6.x releases
+SignWith: yes
+
+Origin: podman-debian
+Label: Podman Debian
+Suite: v5-bookworm
+Codename: v5-bookworm
+Architectures: amd64
+Components: main
+Description: Podman built from source for Debian 12 (bookworm), Podman 5.x releases
+SignWith: yes
+
+Origin: podman-debian
+Label: Podman Debian
+Suite: nightly-bookworm
+Codename: nightly-bookworm
+Architectures: amd64
+Components: main
+Description: Podman built from source for Debian 12 (bookworm), nightly builds of upstream main
+SignWith: yes
+
+Origin: podman-debian
+Label: Podman Debian
+Suite: stable-trixie
+Codename: stable-trixie
+Architectures: amd64
+Components: main
+Description: Podman built from source for Debian 13 (trixie), Podman 6.x releases
+SignWith: yes
+
+Origin: podman-debian
+Label: Podman Debian
+Suite: v5-trixie
+Codename: v5-trixie
+Architectures: amd64
+Components: main
+Description: Podman built from source for Debian 13 (trixie), Podman 5.x releases
+SignWith: yes
+
+Origin: podman-debian
+Label: Podman Debian
+Suite: nightly-trixie
+Codename: nightly-trixie
+Architectures: amd64
+Components: main
+Description: Podman built from source for Debian 13 (trixie), nightly builds of upstream main
+SignWith: yes

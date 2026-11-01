@@ -1,0 +1,44 @@
+#!/bin/bash
+
+# Strict Mode - Exit on error, undefined vars, pipe failures
+set -euo pipefail
+
+# Determine toolpath if not set already
+relativepath="../" # Define relative path to go from this script to the root level of the tool
+if [[ ! -v toolpath ]]; then scriptpath=$(cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd ); toolpath=$(realpath --canonicalize-missing ${scriptpath}/${relativepath}); fi
+
+# Load Configuration
+source "${toolpath}/config.sh"
+
+# Load Functions
+source "${toolpath}/functions.sh"
+
+# Set error trap AFTER sourcing
+trap 'error_handler $? $LINENO "$BASH_SOURCE"' ERR
+
+# Auto-detection now happens in config.sh
+# This script can be run directly or sourced by other scripts
+
+# Derive PROTOC_TAG from PROTOC_VERSION if not set
+if [[ -z "${PROTOC_TAG:-}" ]]; then
+    export PROTOC_TAG="v${PROTOC_VERSION}"
+fi
+
+# Download Protoc for detected architecture
+wget "https://github.com/protocolbuffers/protobuf/releases/download/${PROTOC_TAG}/protoc-${PROTOC_VERSION}-linux-${PROTOC_ARCH}.zip" -O protoc.zip
+
+# Extract
+mkdir -p "${PROTOC_ROOT_FOLDER}/${PROTOC_VERSION}"
+unzip -o protoc.zip -d "${PROTOC_ROOT_FOLDER}/${PROTOC_VERSION}"
+
+export PATH="${PROTOC_PATH}:${PATH}"
+
+if [[ ! -L /usr/local/bin/protoc ]]
+then
+    ln -s ${PROTOC_PATH} /usr/local/bin/protoc
+fi
+
+# Cleanup downloaded archive
+rm -f protoc.zip
+cleanup_build_artifacts
+

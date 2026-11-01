@@ -1,0 +1,27 @@
+name: podman-catatonit
+arch: "${ARCH}"
+platform: linux
+version: "${VERSION}"
+version_schema: none
+maintainer: "Podman Debian <noreply@github.com>"
+description: "Minimal init for containers (compiled from source)"
+vendor: "podman-debian"
+homepage: "https://github.com/openSUSE/catatonit"
+license: "GPL-2.0-or-later"
+section: admin
+priority: optional
+
+conflicts:
+  - catatonit
+
+replaces:
+  - catatonit
+
+provides:
+  - catatonit
+
+contents:
+  - src: "${DESTDIR}/usr/bin/catatonit"
+    dst: /usr/bin/catatonit
+    file_info:
+      mode: 0755

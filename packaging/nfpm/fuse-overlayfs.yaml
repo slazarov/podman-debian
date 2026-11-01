@@ -1,0 +1,27 @@
+name: podman-fuse-overlayfs
+arch: "${ARCH}"
+platform: linux
+version: "${VERSION}"
+version_schema: none
+maintainer: "Podman Debian <noreply@github.com>"
+description: "FUSE overlay filesystem for rootless containers (compiled from source)"
+vendor: "podman-debian"
+homepage: "https://github.com/containers/fuse-overlayfs"
+license: "GPL-2.0-or-later"
+section: admin
+priority: optional
+
+conflicts:
+  - fuse-overlayfs
+
+replaces:
+  - fuse-overlayfs
+
+provides:
+  - fuse-overlayfs
+
+contents:
+  - src: "${DESTDIR}/usr/bin/fuse-overlayfs"
+    dst: /usr/bin/fuse-overlayfs
+    file_info:
+      mode: 0755

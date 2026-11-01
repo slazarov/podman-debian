@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/slazarov/podman-debian/security/advisories/new
+    about: Report security issues privately, not in a public issue (see SECURITY.md).
+  - name: Bugs in Podman or another component
+    url: https://github.com/containers
+    about: Bugs in podman, crun, buildah and the other components belong upstream. This project rebuilds from their source.
