@@ -4,9 +4,9 @@ on:
   schedule:
     # One cron per auto-updating track; the firing cron selects the track (see the
     # resolve-track job).
-    - cron: '30 4 * * *'  # 04:30 UTC — nightly (upstream HEAD)
-    - cron: '30 5 * * *'  # 05:30 UTC — stable  (Podman 6.x, series-cap + soak)
-    - cron: '30 6 * * *'  # 06:30 UTC — v5      (Podman 5.x maintenance, series-cap + soak)
+    - cron: '37 4 * * *'  # 04:37 UTC — nightly (upstream HEAD)
+    - cron: '37 5 * * *'  # 05:37 UTC — stable  (Podman 6.x, series-cap + soak)
+    - cron: '37 6 * * *'  # 06:37 UTC — v5      (Podman 5.x maintenance, series-cap + soak)
   workflow_dispatch:
     inputs:
       build_track:
@@ -36,7 +36,7 @@ permissions:
 # scheduled runs. Different tracks build in parallel; the publish job has its
 # own group (pages-deploy) so only one run assembles and deploys at a time.
 concurrency:
-  group: build-packages-${{ github.event_name == 'workflow_dispatch' && inputs.build_track || github.event.schedule == '30 4 * * *' && 'nightly' || github.event.schedule == '30 5 * * *' && 'stable' || github.event.schedule == '30 6 * * *' && 'v5' || 'unmapped' }}
+  group: build-packages-${{ github.event_name == 'workflow_dispatch' && inputs.build_track || github.event.schedule == '37 4 * * *' && 'nightly' || github.event.schedule == '37 5 * * *' && 'stable' || github.event.schedule == '37 6 * * *' && 'v5' || 'unmapped' }}
   cancel-in-progress: false
   queue: max
 
@@ -83,9 +83,9 @@ jobs:
             TRACK="${{ inputs.build_track }}"
           else
             case "${{ github.event.schedule }}" in
-              '30 4 * * *') TRACK="nightly" ;;
-              '30 5 * * *') TRACK="stable" ;;
-              '30 6 * * *') TRACK="v5" ;;
+              '37 4 * * *') TRACK="nightly" ;;
+              '37 5 * * *') TRACK="stable" ;;
+              '37 6 * * *') TRACK="v5" ;;
               # Fail loud rather than silently building+publishing the wrong track
               # if a cron is ever added/edited without updating this map.
               *) echo "::error::unmapped schedule '${{ github.event.schedule }}' — add it to resolve-track"; exit 1 ;;
@@ -121,7 +121,7 @@ jobs:
   # Check if upstream components changed (nightly cron only)
   # ============================================
   # HEAD-SHA guard for the NIGHTLY cron only (nightly builds from upstream HEAD).
-  # Gated to the 04:30 cron specifically so the stable/v5 crons — which are guarded
+  # Gated to the 04:37 cron specifically so the stable/v5 crons — which are guarded
   # by check-republish instead — never trip this nightly-semantics short-circuit.
   #
   # It compares each component's upstream HEAD with the checkpoint of commits
@@ -130,7 +130,7 @@ jobs:
   # the distros it deployed. A failed or undeployed build therefore never
   # marks its commits as done, and the next nightly builds them again.
   check-changes:
-    if: github.event_name == 'schedule' && github.event.schedule == '30 4 * * *'
+    if: github.event_name == 'schedule' && github.event.schedule == '37 4 * * *'
     runs-on: ubuntu-24.04
     outputs:
       skip: ${{ steps.detect.outputs.skip }}

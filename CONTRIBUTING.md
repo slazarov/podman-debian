@@ -90,7 +90,7 @@ Some tests need `dpkg`, `reprepro` and `gpg` and skip themselves when those are 
 
 ### Running a CI build
 
-Maintainers can start **Build and Publish Packages** from the Actions tab and choose the `stable`, `v5` or `nightly` track. The workflow also runs daily, once per track: nightly at 04:30, stable at 05:30 and v5 at 06:30 UTC.
+Maintainers can start **Build and Publish Packages** from the Actions tab and choose the `stable`, `v5` or `nightly` track. The workflow also runs daily, once per track: nightly at 04:37, stable at 05:37 and v5 at 06:37 UTC.
 
 ## Reporting issues
 

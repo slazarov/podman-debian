@@ -187,8 +187,8 @@ assert_true "no arm64 / arm runners anywhere" \
 assert_true "no hard-coded distro labels in the build workflow" \
     "$(printf '%s\n' "${NOCOMMENT}" | grep -qE 'bookworm|trixie' && echo 0 || echo 1)"
 
-ncron="$(printf '%s\n' "${NOCOMMENT}" | grep -cE "cron: '30 [456] \* \* \*'")"
-assert_equals "three schedule crons (30 4/5/6)" "3" "${ncron}"
+ncron="$(printf '%s\n' "${NOCOMMENT}" | grep -cE "cron: '37 [456] \* \* \*'")"
+assert_equals "three schedule crons (37 4/5/6)" "3" "${ncron}"
 assert_contains "dispatch build_track offers v5" "${NOCOMMENT}" "- v5"
 
 # ============================================
@@ -218,7 +218,7 @@ d = yaml.safe_load(open(sys.argv[1]))
 on = d.get('on', d.get(True))
 crons = {c['cron'] for c in on['schedule']}
 opts = on['workflow_dispatch']['inputs']['build_track']['options']
-print('1' if {'30 4 * * *','30 5 * * *','30 6 * * *'} <= crons and opts == ['stable','v5','nightly'] else '0')
+print('1' if {'37 4 * * *','37 5 * * *','37 6 * * *'} <= crons and opts == ['stable','v5','nightly'] else '0')
 ")
     assert_true "py: crons and dispatch options" "${r}"
 
@@ -227,7 +227,7 @@ import sys, yaml
 d = yaml.safe_load(open(sys.argv[1]))
 cc = str(d['jobs']['check-changes']['if'])
 cr = str(d['jobs']['check-republish']['if'])
-ok = (\"github.event.schedule == '30 4 * * *'\" in cc
+ok = (\"github.event.schedule == '37 4 * * *'\" in cc
       and 'resolve-track' in str(d['jobs']['check-republish'].get('needs', []))
       and \"outputs.track == 'stable'\" in cr and \"outputs.track == 'v5'\" in cr)
 print('1' if ok else '0')
