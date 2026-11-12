@@ -26,9 +26,10 @@ source "${toolpath}/config.sh"
 # Load Functions
 source "${toolpath}/functions.sh"
 
-# Load the post-export Acquire-By-Hash helper. Sourced (not executed), so it
-# only defines add_byhash_and_resign; it relies on repo_manage.sh having
-# imported the GPG key earlier in the publish.
+# Load the post-export Acquire-By-Hash and signing helpers. Sourced (not
+# executed), so it only defines add_byhash_and_resign, resign_release and
+# release_signed_with; they rely on repo_manage.sh having imported the GPG key
+# earlier in the publish.
 source "${toolpath}/scripts/repo_byhash.sh"
 
 # Load the landing-page generator (defines generate_index_html).
@@ -694,12 +695,30 @@ fi
 # keyring from repo_manage.sh's import. Suites without a Release (none materialized
 # yet) are a no-op inside the helper, but we guard here too for clear logging.
 
+#
+# Verbatim suites keep their live signatures, unless those no longer verify
+# against the published public key (REPO_KEYRING, which repo_manage.sh wrote
+# in Step 3). That happens once after a signing-key rotation: without a
+# re-sign the integrity gate below would reject the old signatures and no
+# single-track run could ever publish again. resign_release signs the
+# unchanged Release with the current key, so Release, its indexes and
+# by-hash/ stay byte-identical.
+REPO_KEYRING="${REPO_KEYRING:-${OUTPUT_DIR}/podman-debian.gpg}"
+
 echo ">>> Applying Acquire-By-Hash + re-sign to all exported suites..."
 for suite in "${ALL_SUITES[@]}"; do
     # Verbatim-mirrored suites already carry their original by-hash dirs
     # and signature from the live repo — re-signing them would defeat the
     # verbatim preservation (new Release Date + signature on unchanged content).
     if [[ "${IS_VERBATIM["${suite}"]:-false}" == "true" ]]; then
+        if [[ -s "${REPO_KEYRING}" ]] && ! release_signed_with "${suite}" "${OUTPUT_DIR}" "${REPO_KEYRING}"; then
+            echo "  verbatim, but not signed with the current key — re-signing unchanged Release: ${suite}"
+            if ! resign_release "${suite}" "${OUTPUT_DIR}"; then
+                echo "ERROR: re-signing '${suite}' with the current key failed. Refusing to publish." >&2
+                exit 1
+            fi
+            continue
+        fi
         echo "  preserved verbatim (no re-sign): ${suite}"
         continue
     fi
@@ -829,8 +848,7 @@ done
 # --keyring also checks every suite's signatures against the public key
 # clients install (podman-debian.gpg, written by repo_manage.sh), so a
 # signing problem fails here and not on users' machines. REPO_KEYRING
-# overrides it (the tests sign with a throwaway key).
-REPO_KEYRING="${REPO_KEYRING:-${OUTPUT_DIR}/podman-debian.gpg}"
+# overrides it (the tests sign with a throwaway key); it is set in Step 4b.
 echo ">>> Verifying repository integrity (signatures, index <-> pool, Release <-> index)..."
 "${toolpath}/scripts/verify_repo_integrity.sh" --keyring "${REPO_KEYRING}" "${OUTPUT_DIR}"
 echo ""

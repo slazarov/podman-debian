@@ -98,8 +98,26 @@ add_byhash_and_resign() {
         fi
     done
 
-    # 4) re-sign (key already in keyring): drop the stale signatures, then
-    #    regenerate the inline (InRelease) and detached (Release.gpg) signatures.
+    # 4) re-sign and check the new signatures (resign_release below).
+    resign_release "${lsuite}" "${lrepo}"
+}
+
+# resign_release <suite> <output-dir>
+#   Signs the suite's Release, unchanged, with the key in the keyring: drops the
+#   old InRelease and Release.gpg, writes new ones, and checks that both verify
+#   and that InRelease signs exactly the Release on disk. Returns 1 on the first
+#   failure. Release itself and every index stay byte-identical, so a suite
+#   served verbatim can be moved to a new signing key without changing what
+#   by-hash points at.
+resign_release() {
+    local lsuite="$1" lrepo="$2"
+    local ldist="${lrepo}/dists/${lsuite}"
+    local lrelease="${ldist}/Release"
+
+    if [[ ! -f "${lrelease}" ]]; then
+        echo "ERROR: ${lsuite}: no Release to sign" >&2
+        return 1
+    fi
     if ! rm -f "${ldist}/InRelease" "${ldist}/Release.gpg"; then
         echo "ERROR: ${lsuite}: could not remove the old signatures" >&2
         return 1
@@ -115,8 +133,8 @@ add_byhash_and_resign() {
         return 1
     fi
 
-    # 5) check what was just written: both signatures verify, and the text
-    #    InRelease signs is exactly the Release on disk.
+    # Check what was just written: both signatures verify, and the text
+    # InRelease signs is exactly the Release on disk.
     if ! gpg --batch --quiet --verify "${ldist}/InRelease" 2>/dev/null; then
         echo "ERROR: ${lsuite}: the new InRelease does not verify" >&2
         return 1
@@ -130,6 +148,35 @@ add_byhash_and_resign() {
         return 1
     fi
     return 0
+}
+
+# release_signed_with <suite> <output-dir> <public-keyring>
+#   Returns 0 when the suite's InRelease and Release.gpg both verify with gpgv
+#   against <public-keyring> (binary or ASCII-armored), 1 otherwise, including
+#   when a signature file is missing. Used to find verbatim suites that are
+#   still signed with a retired key. gpgv gets a home directory of its own so
+#   the caller's keyring plays no part.
+release_signed_with() {
+    local lsuite="$1" lrepo="$2" lkeyring="$3"
+    local ldist="${lrepo}/dists/${lsuite}"
+    local lhome lkr lrc=0
+
+    [[ -f "${ldist}/InRelease" && -f "${ldist}/Release.gpg" && -f "${ldist}/Release" ]] || return 1
+    lhome="$(mktemp -d)" || return 1
+    chmod 700 "${lhome}"
+    lkr="${lhome}/keyring.gpg"
+    if LC_ALL=C grep -q -- '-----BEGIN PGP' "${lkeyring}"; then
+        gpg --batch --homedir "${lhome}" --dearmor -o "${lkr}" "${lkeyring}" 2>/dev/null || lrc=1
+    else
+        cp "${lkeyring}" "${lkr}" || lrc=1
+    fi
+    if [[ "${lrc}" -eq 0 ]]; then
+        gpgv --homedir "${lhome}" --keyring "${lkr}" "${ldist}/InRelease" >/dev/null 2>&1 \
+            && gpgv --homedir "${lhome}" --keyring "${lkr}" "${ldist}/Release.gpg" "${ldist}/Release" >/dev/null 2>&1 \
+            || lrc=1
+    fi
+    rm -rf "${lhome}"
+    return "${lrc}"
 }
 
 # ============================================

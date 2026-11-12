@@ -25,6 +25,8 @@
 #      on the live target suite's Packages or Release. One 503 followed by
 #      success is retried and the publish goes through.
 #   5. A failing `gpg --clearsign` or detached sign stops ci_publish.sh.
+#   6. After a signing-key rotation, a verbatim suite still signed with the
+#      old key is re-signed (Release unchanged) and the publish goes through.
 #
 # Needs reprepro, gpg and dpkg-deb. Where they are missing it prints SKIP and
 # exits 0, like tests/test_repo_assemble_byhash.sh (a failure under
@@ -373,6 +375,56 @@ for mode in clearsign detach; do
         "$(grep -q 'signing failed\|gpg --clearsign failed' "${TMP_ROOT}/sign-${mode}.log" && echo yes || echo no)"
 done
 stop_mock_http
+
+# ============================================
+# Step 6: Signing-key rotation
+# ============================================
+# The live repo is signed with the old key. CI now holds a new key and
+# publishes the new public key. A bookworm pass serves stable-trixie verbatim;
+# its live signatures are by the old key, so ci_publish.sh must re-sign its
+# unchanged Release with the new key, or the integrity gate rejects it and no
+# single-track run could publish after a rotation.
+
+echo ""
+echo ">>> Signing-key rotation..."
+OLD_KEYRING="${REPO_KEYRING}"
+ROT_HOME="${TMP_ROOT}/gnupg-rotated"
+mkdir -p "${ROT_HOME}"
+chmod 700 "${ROT_HOME}"
+GNUPGHOME="${ROT_HOME}" gpg --batch --pinentry-mode loopback --passphrase '' \
+    --quick-gen-key 'Podman Repo Rotated Test Key <repo-rotated@example.invalid>' ed25519 sign never >/dev/null 2>&1
+ROT_FPR="$(GNUPGHOME="${ROT_HOME}" gpg --list-keys --with-colons | awk -F: '/^fpr:/{print $10; exit}')"
+echo "${ROT_FPR}:6:" | GNUPGHOME="${ROT_HOME}" gpg --batch --import-ownertrust >/dev/null 2>&1
+ROT_KEYRING="${TMP_ROOT}/rotated-key.gpg"
+GNUPGHOME="${ROT_HOME}" gpg --batch --export "${ROT_FPR}" > "${ROT_KEYRING}"
+
+start_mock_http "${LIVE}" "${TMP_ROOT}/hits-rotate.log"
+ROT_OUT="${TMP_ROOT}/out-rotate"
+mkdir -p "${ROT_OUT}"
+rc=0
+GNUPGHOME="${ROT_HOME}" REPO_KEYRING="${ROT_KEYRING}" on_runner bash "${PROJECT_ROOT}/scripts/ci_publish.sh" \
+    stable bookworm "${NEW_DEBS_BOOKWORM}" "${MOCK_URL}" "${ROT_OUT}" > "${TMP_ROOT}/rotate.log" 2>&1 || rc=$?
+stop_mock_http
+assert_equals "publish after a key rotation completes" "0" "${rc}"
+[[ "${rc}" -eq 0 ]] || tail -20 "${TMP_ROOT}/rotate.log" | sed 's/^/      /'
+assert_equals "the verbatim suite signed with the old key is re-signed" "yes" \
+    "$(grep -q 're-signing unchanged Release: stable-trixie' "${TMP_ROOT}/rotate.log" && echo yes || echo no)"
+assert_equals "its Release is unchanged" "yes" \
+    "$(cmp -s "${LIVE}/dists/stable-trixie/Release" "${ROT_OUT}/dists/stable-trixie/Release" && echo yes || echo no)"
+assert_equals "its indexes are unchanged" "yes" \
+    "$(cmp -s "${LIVE}/dists/stable-trixie/main/binary-amd64/Packages" "${ROT_OUT}/dists/stable-trixie/main/binary-amd64/Packages" && echo yes || echo no)"
+for s in stable-bookworm stable-trixie; do
+    assert_equals "${s}: signed with the new key" "0" \
+        "$(release_signed_with "${s}" "${ROT_OUT}" "${ROT_KEYRING}" && echo 0 || echo 1)"
+    assert_equals "${s}: no longer verifies with the old key" "1" \
+        "$(release_signed_with "${s}" "${ROT_OUT}" "${OLD_KEYRING}" && echo 0 || echo 1)"
+done
+rc=0
+bash "${PROJECT_ROOT}/scripts/verify_repo_integrity.sh" --keyring "${ROT_KEYRING}" "${ROT_OUT}" >/dev/null 2>&1 || rc=$?
+assert_equals "rotated repo verifies against the new key" "0" "${rc}"
+assert_equals "a suite already signed with the current key stays verbatim" "yes" \
+    "$(grep -q 'preserved verbatim (no re-sign): stable-trixie' "${TMP_ROOT}/pass1.log" && echo yes || echo no)"
+gpgconf --homedir "${ROT_HOME}" --kill all >/dev/null 2>&1 || true
 
 echo ""
 echo "========================================"

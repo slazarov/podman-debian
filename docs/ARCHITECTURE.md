@@ -154,7 +154,7 @@ Both scripts use their distro argument as the `DISTRO` override, so they do not 
 - A suite with a live tree is mirrored verbatim: the signed `Release`, `InRelease`, `Release.gpg`, the indexes it lists (checked against the signed hashes) and the pool files they reference. Its signature and `Date` stay byte-identical, which keeps the Acquire-By-Hash window on GitHub Pages' content delivery network closed.
 - A suite with no live tree (first publish) stays empty.
 
-The target suite is then built from the fresh `.deb` files, and Acquire-By-Hash plus re-signing is applied to every suite that was not served verbatim.
+The target suite is then built from the fresh `.deb` files, and Acquire-By-Hash plus re-signing is applied to every suite that was not served verbatim. A verbatim suite whose signatures do not verify against the published key (after a signing-key rotation) has its unchanged `Release` re-signed with the current key; its indexes and `by-hash/` stay byte-identical.
 
 Every download from the live repository goes through `fetch_url` (`scripts/ci_helpers.sh`), which retries network and TLS errors, cut-off transfers and HTTP 408, 429 and 5xx, and tells "absent" (HTTP 404 or 410) apart from "failed". Only "absent" means a suite or file is not published. A download that still fails after the retries stops the publish, so a brief outage of the content delivery network in front of GitHub Pages can never make a suite look empty or drop a package from it. Each request carries a throwaway query string and a `no-cache` header, so a cache in front of GitHub Pages does not answer with a copy from before the last deploy.
 
