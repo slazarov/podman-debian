@@ -14,9 +14,11 @@
 > ```
 >
 > New key fingerprint: `186F B205 0A78 2B87 1E3C  798E BA59 1925 3E6B 3985`
-<!-- REVOCATION-CERT-PLACEHOLDER: link the public revocation certificates for the
-     old keys 0B0622010F2A018D1FEB502C26507BEECFFC87BB and
-     B7F2FD0509240BDACD92B1D1E56CE5A0B9702F11 here once available -->
+>
+> Revocation certificates for the old keys:
+>
+> - `0B06 2201 0F2A 018D 1FEB  502C 2650 7BEE CFFC 87BB`: [`packaging/repo/revocations/0B0622010F2A018D1FEB502C26507BEECFFC87BB.asc`](packaging/repo/revocations/0B0622010F2A018D1FEB502C26507BEECFFC87BB.asc)
+> - `B7F2 FD05 0924 0BDA CD92  B1D1 E56C E5A0 B970 2F11`: [`packaging/repo/revocations/B7F2FD0509240BDACD92B1D1E56CE5A0B9702F11.asc`](packaging/repo/revocations/B7F2FD0509240BDACD92B1D1E56CE5A0B9702F11.asc)
 
 Build the Podman container stack from upstream source for Debian, or install the prebuilt packages from the project's APT repository.
 
