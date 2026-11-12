@@ -14,6 +14,31 @@ Build the Podman container stack from upstream source for Debian, or install the
 
 Debian testing, unstable and other distributions are not supported. The build stops with an error if it detects one.
 
+## Signing key changed on 2026-11-11
+
+The repository signing key was replaced on 2026-11-11 for security reasons: the old private key may have been exposed. Suites are now signed only with the new key, and the old key must no longer be trusted.
+
+| | Fingerprint |
+|---|---|
+| New key (ed25519, created 2026-11-12) | `186F B205 0A78 2B87 1E3C  798E BA59 1925 3E6B 3985` |
+| Old key, retired | `0B06 2201 0F2A 018D 1FEB  502C 2650 7BEE CFFC 87BB` |
+| Old key, retired (signed this repository before 2026-11-01) | `B7F2 FD05 0924 0BDA CD92  B1D1 E56C E5A0 B970 2F11` |
+
+If you already use the repository, `apt update` reports that the repository is not signed (`NO_PUBKEY BA5919253E6B3985` on Debian 12, a missing-key error for `186FB2050A782B871E3C798EBA5919253E6B3985` on Debian 13) until you replace the key. Download the new key, check that it shows the new fingerprint above, then update:
+
+```bash
+sudo curl -fsSL -o /etc/apt/keyrings/podman-debian.gpg \
+  https://slazarov.github.io/podman-debian/podman-debian.gpg
+gpg --show-keys --with-fingerprint /etc/apt/keyrings/podman-debian.gpg
+sudo apt update
+```
+
+The `gpg` output must list exactly one key, `186F B205 0A78 2B87 1E3C  798E BA59 1925 3E6B 3985`. If it shows anything else, do not continue; report it as described in [SECURITY.md](SECURITY.md). Your `.sources` file needs no change.
+
+If you imported an old key anywhere else (for example with `gpg --import`), delete it there: `gpg --delete-keys 0B0622010F2A018D1FEB502C26507BEECFFC87BB B7F2FD0509240BDACD92B1D1E56CE5A0B9702F11`.
+
+Revocation certificates for the old keys: _to be published here._ <!-- TODO(key-rotation-2026-11-11): add links to the public revocation certificates for 0B06…87BB and B7F2…2F11. -->
+
 ## Install from the APT repository
 
 Download the signing key:

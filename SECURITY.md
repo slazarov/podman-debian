@@ -40,6 +40,8 @@ apt rejects a suite signed by a key it does not already trust, so rotate with a 
 
 If the private key may be compromised, rotate at once without a transition period and disclose through the channel above. Never commit a private key.
 
+On the first publish after the `GPG_PRIVATE_KEY` secret changes, `ci_publish.sh` re-signs every suite it would otherwise serve verbatim but that is still signed with the old key, so one run moves every suite to the new key.
+
 ## Supported versions
 
 Only the latest published build of each track (stable, v5, nightly) for each supported Debian release (12 and 13) gets fixes. Older builds are not maintained.
