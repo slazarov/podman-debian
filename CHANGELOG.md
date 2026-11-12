@@ -6,7 +6,7 @@ Notable changes to this project are recorded here, in the format of [Keep a Chan
 
 ### Security
 
-- The repository signing key was replaced on 2026-11-11 because the old private key may have been exposed. New key: `186F B205 0A78 2B87 1E3C  798E BA59 1925 3E6B 3985`. Retired: `0B06 2201 0F2A 018D 1FEB  502C 2650 7BEE CFFC 87BB` and `B7F2 FD05 0924 0BDA CD92  B1D1 E56C E5A0 B970 2F11`. Existing users must download the new `podman-debian.gpg`; see the README.
+- The repository signing key was rotated on 2026-11-11. New key: `186F B205 0A78 2B87 1E3C  798E BA59 1925 3E6B 3985`. Retired: `0B06 2201 0F2A 018D 1FEB  502C 2650 7BEE CFFC 87BB` and `B7F2 FD05 0924 0BDA CD92  B1D1 E56C E5A0 B970 2F11`. Existing users must download the new `podman-debian.gpg`; see the README.
 - `ci_publish.sh` re-signs a suite it serves verbatim when that suite's signatures do not verify against the published key, leaving `Release` and its indexes unchanged. Without this, no run could publish after a key rotation, because the integrity gate rejected the old signatures on the suites the run did not rebuild.
 
 ### Added
