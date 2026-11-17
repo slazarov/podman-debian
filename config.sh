@@ -323,8 +323,12 @@ export CONTAINER_LIBS_TAG="${CONTAINER_LIBS_TAG:-}"
 
 # Auto-detect latest protoc version if not specified
 if [[ -z "${PROTOC_VERSION:-}" ]]; then
-    export PROTOC_VERSION=$(get_latest_protoc_version)
+    if ! PROTOC_VERSION=$(get_latest_protoc_version); then
+        echo "ERROR: Set PROTOC_VERSION explicitly or retry protoc release detection" >&2
+        exit 1
+    fi
 fi
+export PROTOC_VERSION
 # Derive PROTOC_TAG from PROTOC_VERSION if not already set
 if [[ -z "${PROTOC_TAG:-}" ]]; then
     export PROTOC_TAG="v${PROTOC_VERSION}"
