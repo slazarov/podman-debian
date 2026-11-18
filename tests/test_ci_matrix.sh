@@ -139,7 +139,7 @@ assert_contains "Go cache key has matrix.distro" "${NOCOMMENT}" "key: go-\${{ ma
 assert_contains "artifact name has matrix.distro" "${NOCOMMENT}" "name: debs-\${{ matrix.distro }}"
 assert_contains "DISTRO override is the matrix distro" "${NOCOMMENT}" "DISTRO=\${{ matrix.distro }}"
 assert_contains "build checks version ordering" "${NOCOMMENT}" "./scripts/verify_versions.sh"
-assert_contains "publish downloads debs-* artifacts" "${NOCOMMENT}" "pattern: debs-*"
+assert_contains "publish downloads named distro artifacts" "${NOCOMMENT}" 'gh run download "${GITHUB_RUN_ID}" --name "debs-${distro}"'
 assert_true "publish never merges artifacts across distros" \
     "$(printf '%s\n' "${NOCOMMENT}" | grep -q 'merge-multiple: true' && echo 0 || echo 1)"
 assert_contains "publish runs ci_publish.sh per selected distro" "${NOCOMMENT}" '"artifacts/debs-${distro}" "${REPO_URL}" "repo-output"'
@@ -238,14 +238,16 @@ print('1' if ok else '0')
 import sys, yaml
 d = yaml.safe_load(open(sys.argv[1]))
 steps = d['jobs']['publish']['steps']
-dl = [s for s in steps if 'download-artifact' in str(s.get('uses',''))]
-debs = [s for s in dl if s['with'].get('pattern') == 'debs-*']
-ok = (len(debs) == 1
-      and not any(s['with'].get('merge-multiple', False) for s in dl)
+dl = [s for s in steps if s.get('name') == 'Download build artifacts']
+body = dl[0].get('run', '') if len(dl) == 1 else ''
+ok = ('--dir \"artifacts/debs-\${distro}\"' in body
+      and '--dir \"artifacts/nightly-revs-\${distro}\"' in body
+      and '\"\${conclusion}\" == success' in body
+      and dl[0]['env'].get('GH_TOKEN') == '\${{ github.token }}'
       and not any(s.get('continue-on-error') for s in steps))
 print('1' if ok else '0')
 ")
-    assert_true "py: one per-artifact debs download, no merge, no continue-on-error" "${r}"
+    assert_true "py: explicit artifact directories, successful cells only, strict errors" "${r}"
 
     r=$(py "
 import sys, yaml
@@ -276,6 +278,23 @@ ok = ('hold' in rt['outputs'] and 'resolved_env' in rt['outputs']
 print('1' if ok else '0')
 ")
     assert_true "py: resolve once; a hold stops the build even with force_rebuild" "${r}"
+
+    r=$(py "
+import sys, yaml
+j = yaml.safe_load(open(sys.argv[1]))['jobs']
+rt = j['resolve-track']
+protoc = next(s for s in rt['steps'] if s.get('id') == 'protoc')
+token = '\${{ github.token }}'
+version = '\${{ needs.resolve-track.outputs.protoc_version }}'
+ok = (rt['outputs']['protoc_version'] == '\${{ steps.protoc.outputs.version }}'
+      and protoc['env']['GH_TOKEN'] == token
+      and protoc['if'] == \"steps.resolve.outputs.hold != 'true'\"
+      and all(j[k]['env']['PROTOC_VERSION'] == version for k in ('build', 'publish'))
+      and all('GH_TOKEN' not in j[k]['env'] for k in ('build', 'publish'))
+      and any('\"PROTOC_VERSION=\${PROTOC_VERSION}\"' in s.get('run', '') for s in j['build']['steps']))
+print('1' if ok else '0')
+")
+    assert_true "py: authenticated protoc lookup feeds build, sudo and publish" "${r}"
 
     r=$(py "
 import sys, yaml

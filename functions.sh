@@ -389,12 +389,21 @@ get_required_buildah_tag() {
 }
 
 get_latest_protoc_version() {
-    # Fetch latest protoc release from GitHub API
-    # Returns version WITHOUT v prefix (e.g., "34.0" not "v34.0")
-    local latest_tag
-    latest_tag=$(curl -s "https://api.github.com/repos/protocolbuffers/protobuf/releases/latest" | grep '"tag_name"' | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
-    # Strip v prefix if present (tag_name is "v34.0", we want "34.0")
-    echo "${latest_tag#v}"
+    # Return a release version without v; never let an API error become an
+    # empty version in the installer's download URL.
+    local lresponse ltag
+    if ! lresponse=$(curl -fsS --retry 3 --retry-all-errors \
+        --connect-timeout 10 --max-time 30 \
+        "https://api.github.com/repos/protocolbuffers/protobuf/releases/latest"); then
+        echo "ERROR: Could not fetch latest protoc release" >&2
+        return 1
+    fi
+    ltag=$(printf '%s\n' "${lresponse}" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
+    if [[ ! "${ltag}" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+        echo "ERROR: Latest protoc release has a missing or invalid tag_name" >&2
+        return 1
+    fi
+    printf '%s\n' "${ltag#v}"
 }
 
 get_latest_go_version() {
