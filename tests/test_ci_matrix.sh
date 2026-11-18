@@ -281,6 +281,23 @@ print('1' if ok else '0')
 
     r=$(py "
 import sys, yaml
+j = yaml.safe_load(open(sys.argv[1]))['jobs']
+rt = j['resolve-track']
+protoc = next(s for s in rt['steps'] if s.get('id') == 'protoc')
+token = '\${{ github.token }}'
+version = '\${{ needs.resolve-track.outputs.protoc_version }}'
+ok = (rt['outputs']['protoc_version'] == '\${{ steps.protoc.outputs.version }}'
+      and protoc['env']['GH_TOKEN'] == token
+      and protoc['if'] == \"steps.resolve.outputs.hold != 'true'\"
+      and all(j[k]['env']['PROTOC_VERSION'] == version for k in ('build', 'publish'))
+      and all('GH_TOKEN' not in j[k]['env'] for k in ('build', 'publish'))
+      and any('\"PROTOC_VERSION=\${PROTOC_VERSION}\"' in s.get('run', '') for s in j['build']['steps']))
+print('1' if ok else '0')
+")
+    assert_true "py: authenticated protoc lookup feeds build, sudo and publish" "${r}"
+
+    r=$(py "
+import sys, yaml
 d = yaml.safe_load(open(sys.argv[1]))
 j = d['jobs']
 cc = [str(s.get('uses', '')) for s in j['check-changes']['steps']]

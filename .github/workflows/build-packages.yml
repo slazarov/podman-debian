@@ -62,6 +62,7 @@ jobs:
       matrix: ${{ steps.matrix.outputs.matrix }}
       hold: ${{ steps.resolve.outputs.hold }}
       resolved_env: ${{ steps.resolve.outputs.resolved_env }}
+      protoc_version: ${{ steps.protoc.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -116,6 +117,30 @@ jobs:
             cat "${RESOLVED}"
             echo "RESOLVED_ENV_EOF"
           } >> "$GITHUB_OUTPUT"
+
+      # Resolve once with GitHub authentication. The build and publish jobs
+      # source config.sh several times and only need the resulting version.
+      - name: Resolve protoc version
+        id: protoc
+        if: steps.resolve.outputs.hold != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=""
+          if [[ -f "${RUNNER_TEMP}/resolved.env" ]]; then
+            version="$(sed -n 's/^export PROTOC_VERSION="\([^"]*\)"$/\1/p' "${RUNNER_TEMP}/resolved.env")"
+          fi
+          if [[ -z "${version}" ]]; then
+            tag="$(gh api repos/protocolbuffers/protobuf/releases/latest --jq '.tag_name // empty')"
+            if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+              echo "::error::Latest protoc release has a missing or invalid tag_name"
+              exit 1
+            fi
+            version="${tag#v}"
+          fi
+          echo "Protoc version: ${version}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
 
   # ============================================
   # Check if upstream components changed (nightly cron only)
@@ -222,6 +247,8 @@ jobs:
     runs-on: ubuntu-24.04
     container: ${{ matrix.container }}
     timeout-minutes: 180
+    env:
+      PROTOC_VERSION: ${{ needs.resolve-track.outputs.protoc_version }}
     defaults:
       run:
         shell: bash
@@ -347,6 +374,7 @@ jobs:
           # point at runner-visible paths so actions/cache can save them.
           env_args=(
             DEBIAN_FRONTEND=noninteractive
+            "PROTOC_VERSION=${PROTOC_VERSION}"
             "DESTDIR=${DESTDIR}"
             "GOCACHE=$HOME/.cache/go-build" "GOMODCACHE=$HOME/.cache/go-mod"
             # The matrix distro is the DISTRO override, so config.sh composes
@@ -522,6 +550,7 @@ jobs:
     env:
       TRACK: ${{ needs.resolve-track.outputs.track }}
       REPO_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+      PROTOC_VERSION: ${{ needs.resolve-track.outputs.protoc_version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
