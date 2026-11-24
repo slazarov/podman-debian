@@ -77,7 +77,7 @@ source versions-nightly.env && sudo -E ./setup.sh                               
 | `PROTOC_VERSION` | `34.0` | protoc version. Defaults to the latest release (`get_latest_protoc_version`). |
 | `PROTOC_TAG` | `v34.0` | protoc tag. Defaults to `v${PROTOC_VERSION}`. |
 | `GOVERSION` | `1.26.8` | Go version. Defaults to the version in Podman's `go.mod`. Sets `GOPATH` and `GOROOT` under `/opt/go/${GOVERSION}`. |
-| `RUST_VERSION` | `1.88` | Rust version. Defaults to the minimum in Netavark's `Cargo.toml`. |
+| `RUST_VERSION` | `stable` for nightly HEAD, detected otherwise | Default Rustup toolchain. Nightly Netavark builds from HEAD use the stable Rust channel. Tagged builds use the minimum in Netavark's `Cargo.toml`, with `stable` as the fallback. Rustup overrides in the build directory take precedence. |
 
 Policy variables read by `resolve_versions.sh`:
 

@@ -73,6 +73,55 @@ grep -q 'ERROR: Set PROTOC_VERSION explicitly' "${TEST_TMPDIR}/config-failure"
 )
 echo "PASS: config stops on lookup failure and preserves explicit overrides"
 
+# The failing Netavark revision still declared 1.88 when its lockfile began
+# requiring 1.89. Exercise CI's actual build-environment step and local config.
+(
+    unset NIGHTLY_BUILD RUST_VERSION
+    export MOCK_STATUS=0 MOCK_RESPONSE='rust-version = "1.88"' TEST_TMPDIR
+    export -f curl
+    [[ "$(NIGHTLY_BUILD=true get_required_rust_version v2.0.0)" == 1.88 ]]
+
+    awk '
+        /- name: Prepare the build environment/ { found=1; next }
+        found && /^      - / { exit }
+        found && /^        run: \|/ { body=1; next }
+        body { sub(/^          /, ""); print }
+    ' "${PROJECT_ROOT}/.github/workflows/build-packages.yml" > "${TEST_TMPDIR}/build-env.sh"
+    [[ -s "${TEST_TMPDIR}/build-env.sh" ]]
+    cd "${PROJECT_ROOT}"
+    export RUNNER_TEMP="${TEST_TMPDIR}" GITHUB_OUTPUT="${TEST_TMPDIR}/build-outputs"
+    source scripts/ci_helpers.sh
+    printf -v RESOLVED_ENV 'export %s="v2.0.0"\n' "${RESOLVED_ENV_REQUIRED_KEYS[@]}"
+    for track in stable v5; do
+        : > "${GITHUB_OUTPUT}"
+        TRACK="${track}" RESOLVED_ENV="${RESOLVED_ENV}" bash "${TEST_TMPDIR}/build-env.sh" > /dev/null
+        grep -qx 'RUST_VERSION=1.88' "${RUNNER_TEMP}/build-env"
+        grep -qx 'rust=1.88' "${GITHUB_OUTPUT}"
+        grep -q '/containers/netavark/v2.0.0/Cargo.toml' "${TEST_TMPDIR}/curl-args"
+        rm "${TEST_TMPDIR}/curl-args"
+    done
+    : > "${GITHUB_OUTPUT}"
+    TRACK=nightly bash "${TEST_TMPDIR}/build-env.sh" > /dev/null
+    grep -qx 'NIGHTLY_BUILD=true' "${TEST_TMPDIR}/build-env"
+    grep -qx 'SHALLOW_CLONE=false' "${TEST_TMPDIR}/build-env"
+    grep -qx 'RUST_VERSION=stable' "${TEST_TMPDIR}/build-env"
+    grep -qx 'rust=stable' "${TEST_TMPDIR}/build-outputs"
+
+    export NIGHTLY_BUILD=true ARCH=amd64 DISTRO=trixie GOVERSION=1.26.8 PROTOC_VERSION=34.0
+    export GOCACHE="${TEST_TMPDIR}/go-build" GOMODCACHE="${TEST_TMPDIR}/go-mod"
+    (
+        source "${PROJECT_ROOT}/config.sh" > /dev/null
+        [[ "${RUST_VERSION}" == stable ]]
+    )
+    (
+        export RUST_VERSION=1.90.0
+        source "${PROJECT_ROOT}/config.sh" > /dev/null
+        [[ "${RUST_VERSION}" == 1.90.0 ]]
+    )
+    [[ ! -e "${TEST_TMPDIR}/curl-args" ]]
+)
+echo "PASS: nightly CI and local setup use stable Rust by default"
+
 # Extract the actual workflow block, so the regression executes CI's code.
 awk '
     /- name: Download build artifacts/ { found=1; next }
