@@ -253,7 +253,7 @@ fi
 export GOPATH="/opt/go/${GOVERSION}/bin"
 export GOROOT="/opt/go/${GOVERSION}"
 
-# Auto-detect Rust version from Netavark's Cargo.toml (source of truth)
+# Use stable Rust for nightly Netavark HEAD and the declared minimum for tags.
 if [[ -z "${RUST_VERSION:-}" ]]; then
     export RUST_VERSION=$(get_required_rust_version "${NETAVARK_TAG:-}")
 fi

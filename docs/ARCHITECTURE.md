@@ -101,7 +101,7 @@ The suffix also sorts below Debian's own package of the same upstream version (f
 
 1. Track resolution. For stable (Podman 6.x) and v5 (Podman 5.x), `scripts/resolve_versions.sh` reads a policy file (`versions-stable.env` or `versions-v5.env`) and prints concrete `*_TAG` values. For each component an exact `*_TAG` wins; otherwise a `*_SERIES` prefix cap selects the highest matching tag (`PODMAN_SERIES=6` picks the highest `6.x`); otherwise the latest upstream release is used. Buildah is derived from Podman's `go.mod` at the resolved Podman tag. A non-frozen tag is only adopted once its commit is `STABLE_SOAK_DAYS` old (default 7). For nightly, `NIGHTLY_BUILD=true` and `SHALLOW_CLONE=false` build from upstream HEAD.
 
-2. Preflight and configuration. `setup.sh` sources `config.sh`, which detects the architecture and distro and reads the Go version from Podman's `go.mod` and the Rust version from Netavark's `Cargo.toml`. `scripts/preflight_check.sh` checks cgroups v2, subuid/subgid, FUSE, the kernel version and noexec mounts.
+2. Preflight and configuration. `setup.sh` sources `config.sh`, which detects the architecture and distro and reads the Go version from Podman's `go.mod`. Nightly Netavark builds from HEAD use the stable Rust channel. Tagged builds read the Rust version from Netavark's `Cargo.toml`. `scripts/preflight_check.sh` checks cgroups v2, subuid/subgid, FUSE, the kernel version and noexec mounts.
 
 3. Toolchain. `install_dependencies.sh` installs the build packages for the target release (`systemd` provides `systemd.pc` on bookworm, `systemd-dev` on trixie). `install_rust.sh`, `install_protoc.sh` and `install_go.sh` install the toolchains from upstream.
 
@@ -133,7 +133,7 @@ The checkpoint is a cache entry (`nightly-rev-v2-*`) holding one line per distro
 
 ### Compiler caches
 
-Go module and build caches are kept per distro and track, as before. Rust (sccache) and C (ccache) output is cached too, under one key per distro, architecture, track, Rust version and sccache version: `cc-v1-<label>-amd64-<track>-rust<version>-sccache<version>-<run id>`, restored by prefix from the latest matching run. The key only picks a starting point. sccache hashes the `rustc` binary and ccache hashes the compiler (`compilercheck=content`), so a toolchain change behind the same key misses the cache instead of reusing a wrong object. CI caps sccache at 1 GB and ccache at 500 MB, and sets `CACHE_STRICT=true`, which fails the build when an enabled wrapper is missing. After the build, `compiler_cache_report` prints both tools' statistics and fails the cell if an enabled cache saw no compile requests. The caches hold compiler output only, never signing keys or repository state.
+Go module and build caches are kept per distro and track, as before. Rust (sccache) and C (ccache) output uses the key `cc-v1-<label>-amd64-<track>-rust<toolchain>-sccache<version>-<run id>` and restores by prefix from the latest matching run. The Rust toolchain field holds a version or the `stable` channel. The key only picks a starting point. sccache hashes the `rustc` binary and ccache hashes the compiler (`compilercheck=content`), so a toolchain change behind the same key misses the cache instead of reusing a wrong object. CI caps sccache at 1 GB and ccache at 500 MB, and sets `CACHE_STRICT=true`, which fails the build when an enabled wrapper is missing. After the build, `compiler_cache_report` prints both tools' statistics and fails the cell if an enabled cache saw no compile requests. The caches hold compiler output only, never signing keys or repository state.
 
 To reproduce the publish locally:
 
@@ -176,7 +176,7 @@ reprepro keeps one `pool/` for all suites, keyed by source, version and architec
 
 - `detect_architecture`, `detect_distro_version_id`, `distro_label_for_version_id` (`functions.sh`): host and target detection, described above.
 - `is_valid_suite`, `resolve_publish_targets` (`config.sh`): suite validation and routing.
-- `get_required_go_version`, `get_required_rust_version` (`functions.sh`): read toolchain versions from Podman's `go.mod` and Netavark's `Cargo.toml`.
+- `get_required_go_version`, `get_required_rust_version` (`functions.sh`) select toolchains using Podman's `go.mod` and Netavark's `Cargo.toml`. Nightly Netavark builds from HEAD use the stable Rust channel.
 - `git_clone_update`, `git_checkout` (`functions.sh`): shared clone and checkout logic for every build script. They honor `SHALLOW_CLONE` and `NIGHTLY_BUILD`.
 - `run_script` (`setup.sh`): runs each sub-script with timing and records success in `COMPONENTS_OK`.
 - `run_logged`, `log_build_output`, `error_handler` (`functions.sh`): per-component logs, with the log tail printed on failure, and the ERR trap that reports the failing script and line.

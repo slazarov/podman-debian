@@ -458,6 +458,13 @@ get_required_go_version() {
 }
 
 get_required_rust_version() {
+    # Upstream HEAD can lock dependencies that require a newer compiler than
+    # Netavark declares. Use rustup's stable channel for nightly builds.
+    if [[ "${NIGHTLY_BUILD:-false}" == "true" && -z "${1:-}" ]]; then
+        printf '%s\n' stable
+        return
+    fi
+
     # Auto-detect Rust MSRV from Netavark's Cargo.toml (upstream source of truth)
     # Parameter: optional git ref (tag like "v1.17.2" or empty for "main")
     # Returns version like "1.86" or "stable"

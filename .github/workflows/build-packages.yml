@@ -298,7 +298,7 @@ jobs:
 
       # Turns the track into KEY=VALUE pairs for setup.sh. For stable/v5 those
       # are resolve-track's tags, validated before use. Also works out the two
-      # toolchain versions in the compiler cache key: the Rust version the
+      # toolchain selectors in the compiler cache key: the Rust toolchain the
       # build will install (passed on as RUST_VERSION so both agree) and the
       # sccache version from config.sh.
       - name: Prepare the build environment
@@ -314,7 +314,8 @@ jobs:
             printf '%s\n' "${RESOLVED_ENV}" > "${RUNNER_TEMP}/resolved.env"
             resolved_env_pairs "${RUNNER_TEMP}/resolved.env" > "${BUILD_ENV}"
           elif [[ "${TRACK}" == "nightly" ]]; then
-            printf '%s\n' NIGHTLY_BUILD=true SHALLOW_CLONE=false > "${BUILD_ENV}"
+            export NIGHTLY_BUILD=true
+            printf '%s\n' "NIGHTLY_BUILD=${NIGHTLY_BUILD}" SHALLOW_CLONE=false > "${BUILD_ENV}"
           else
             echo "::error::unknown track '${TRACK}'"; exit 1
           fi
@@ -344,7 +345,7 @@ jobs:
             go-${{ matrix.distro }}-
 
       # Rust (sccache) and C (ccache) compiler output. Keyed by distro,
-      # architecture, track, Rust version and sccache version, restored by
+      # architecture, track, Rust toolchain and sccache version, restored by
       # prefix from the latest run with the same toolchain. A key is only an
       # index: sccache hashes the rustc binary and ccache hashes the compiler
       # (compilercheck=content), so a changed toolchain behind the same key
