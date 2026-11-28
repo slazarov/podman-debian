@@ -51,7 +51,7 @@ step_start "Building"
 # via curl — prone to transient HTTP failures (502/503) that break the entire build.
 # golangci-lint is a development/lint tool, not needed for packaging.
 # Man pages are built separately using go-md2man (see "Building man pages" step).
-run_logged make -j "$NPROC" GO="$GOPATH/go" GCFLAGS="${GO_GCFLAGS}" LDFLAGS="${GO_LDFLAGS}" BUILDTAGS="seccomp apparmor systemd" PREFIX=/usr bin/buildah
+run_logged make -j "$NPROC" GO="$GOPATH/go" GCFLAGS="${GO_GCFLAGS}" EXTRA_LDFLAGS="${GO_LDFLAGS}" BUILDTAGS="seccomp apparmor systemd" PREFIX=/usr bin/buildah
 step_done
 
 step_start "Building man pages"

@@ -11,5 +11,7 @@
 # same filename in the pool, discarding the new build. A bump changes every
 # package's filename once, so the whole set republishes.
 #
-# History: 1 = initial; 2 = podman-podman Recommends dbus-user-session.
-export PACKAGE_REVISION="${PACKAGE_REVISION:-2}"
+# History: 1 = initial; 2 = podman-podman Recommends dbus-user-session;
+# 3 = shipped ELF binaries stripped (package_all.sh) and .debs xz-compressed,
+# to fit the GitHub Pages size limit.
+export PACKAGE_REVISION="${PACKAGE_REVISION:-3}"

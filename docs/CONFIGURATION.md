@@ -86,7 +86,9 @@ Policy variables read by `resolve_versions.sh`:
 | `PODMAN_SERIES` | Series cap for Podman: `6` in `versions-stable.env`, `5` in `versions-v5.env`. The resolver picks the highest tag in that series. An exact `PODMAN_TAG` overrides it. |
 | `NETAVARK_SERIES`, `AARDVARK_DNS_SERIES` | `2` on stable, `1` on v5. Netavark and aardvark-dns 2.x require Podman 6. |
 | `BUILDAH_SERIES` | `1.44` on stable, `1.43` on v5. Buildah is derived from Podman's `go.mod`; the series caps the fallback and rejects a derived version outside it. |
-| `STABLE_SOAK_DAYS` | Default `7`. A non-frozen tag is adopted only once its commit is at least this many days old. |
+| `STABLE_SOAK_DAYS` | Default `3`. A non-frozen tag is adopted only once its commit is at least this many days old. |
+| `GIT_REMOTE_ATTEMPTS` | Default `4`. How many times each upstream `git ls-remote` and tag fetch is tried (resolver, republish guard, pasta versioning). A transfer stalled below 1 KB/s for 30 seconds counts as a failed try. Only after every try fails does the component hold as uncertain. |
+| `GIT_REMOTE_RETRY_DELAY` | Default `3`. Seconds between those tries, multiplied by the attempt number. The tests set it to `0`. |
 
 ### Nightly
 
@@ -126,7 +128,7 @@ The nightly marker is `~~git`, with two tildes. dpkg compares `~git` and `~deb` 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `GO_GCFLAGS` | `-c=16` | Parallel compilation inside the Go compiler. |
-| `GO_LDFLAGS` | `-s -w` | Strip debug symbols. |
+| `GO_LDFLAGS` | `-s -w` | Strip debug symbols. Passed to the podman, buildah and skopeo Makefiles as `EXTRA_LDFLAGS`. `package_all.sh` strips every staged ELF executable and shared object anyway, whatever this is set to. |
 | `GOGC_BUILD` | `off` | Disable the Go garbage collector during compilation. Faster, uses more memory. Set to empty to re-enable. |
 | `GOCACHE` | `/var/cache/go-build` | Go build cache, shared by all components. |
 | `GOMODCACHE` | `/var/cache/go-mod` | Go module cache. |
@@ -144,8 +146,10 @@ The nightly marker is `~~git`, with two tildes. dpkg compares `~git` and `~deb` 
 | `FETCH_MAX_TIME` | `300` | Time limit for one download, in seconds. |
 | `PROPAGATION_ATTEMPTS` | `30` | How many times the publish job polls each suite's live `InRelease` after a deploy. |
 | `PROPAGATION_DELAY` | `10` | Seconds between those polls. |
+| `ARTIFACT_ATTEMPTS` | `12` | How many times the publish job polls the run's artifact list for `github-pages` before `deploy-pages` (`wait_for_run_artifact`). A failed `gh api` call counts as not listed yet. |
+| `ARTIFACT_DELAY` | `5` | Seconds between those polls. |
 
-`repo_manage.sh` takes the output directory as its fourth argument (default `${toolpath}/repo-output`). `package_all.sh` always writes to `${toolpath}/output`.
+`repo_manage.sh` takes the output directory as its fourth argument (default `${toolpath}/repo-output`). `package_all.sh` always writes to `${toolpath}/output`. It packages from a private copy of `DESTDIR` in a temporary directory, strips that copy and leaves the caller's staging tree unchanged; it needs `strip` and `readelf` (binutils) and `dpkg-deb` (dpkg) besides `nfpm`.
 
 `check_republish_needed.sh <stable|v5> [repo-url] [resolved-env-file]` takes an optional third argument: the output of `resolve_versions.sh`. CI passes the one resolve-track produced, so the resolver runs once per run. The file must contain only `export NAME="value"` lines for the known `*_TAG` names (and `PROTOC_VERSION`/`PROTOC_TAG`), each component exactly once; anything else fails the guard. Without the argument, the guard runs the resolver itself.
 

@@ -10,6 +10,8 @@ homepage: "https://github.com/containers/fuse-overlayfs"
 license: "GPL-2.0-or-later"
 section: admin
 priority: optional
+deb:
+  compression: xz
 
 conflicts:
   - fuse-overlayfs

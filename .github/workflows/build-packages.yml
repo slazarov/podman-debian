@@ -685,6 +685,18 @@ jobs:
         with:
           path: repo-output/
 
+      # deploy-pages finds the artifact through the run's artifact list, which
+      # can lag the upload by a few seconds. Without this wait it then fails
+      # with 'No artifacts named "github-pages" were found' even though the
+      # upload worked (seen on 2026-11-26 and twice on 2026-11-27).
+      - name: Wait for the Pages artifact to be listed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          source scripts/ci_helpers.sh
+          wait_for_run_artifact "${GITHUB_REPOSITORY}" "${GITHUB_RUN_ID}" github-pages
+
       - id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
 

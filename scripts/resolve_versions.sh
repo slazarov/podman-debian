@@ -17,7 +17,7 @@
 #   4. neither -> float to the highest SOAKED stable tag.
 #
 # Soak: a non-frozen/non-derived tag is only adopted once its target commit is at
-# least STABLE_SOAK_DAYS old (default 7). Candidates are walked highest->lowest and
+# least STABLE_SOAK_DAYS old (default 3). Candidates are walked highest->lowest and
 # the first soaked one wins. If nothing in a series/float has soaked yet, or the
 # remote is unreachable, that component HOLDS: the resolver exits non-zero and emits
 # NO partial environment, so a scheduled build treats the run as skip (fail-closed).
@@ -68,7 +68,7 @@ COMPONENT_ROWS=(
     "fuse-overlayfs|FUSE_OVERLAYFS_TAG|FUSE_OVERLAYFS_SERIES|https://github.com/containers/fuse-overlayfs.git"
     "catatonit|CATATONIT_TAG|CATATONIT_SERIES|https://github.com/openSUSE/catatonit.git"
     "container-configs|CONTAINER_LIBS_TAG|CONTAINER_LIBS_SERIES|https://github.com/containers/container-libs.git"
-    "pasta|PASTA_TAG|PASTA_SERIES|git://passt.top/passt"
+    "pasta|PASTA_TAG|PASTA_SERIES|https://passt.top/passt"
 )
 
 # _resolver_now_epoch -- "now" in Unix seconds, overridable for tests.
@@ -96,7 +96,7 @@ _resolver_now_epoch() {
 _soak_ok() {
     local lurl="$1"
     local ltag="$2"
-    local lsoak="${STABLE_SOAK_DAYS:-7}"
+    local lsoak="${STABLE_SOAK_DAYS:-3}"
     if [[ "${lsoak}" -le 0 ]]; then
         return 0
     fi
@@ -195,7 +195,7 @@ resolve_component() {
         if [[ "${lrc}" -eq 2 ]]; then
             echo "  HOLD ${lcomp}: series '${lseries}' unresolved (upstream unreachable)" >&2; return 2
         fi
-        echo "  HOLD ${lcomp}: no tag in series '${lseries}' has soaked ${STABLE_SOAK_DAYS:-7}d" >&2
+        echo "  HOLD ${lcomp}: no tag in series '${lseries}' has soaked ${STABLE_SOAK_DAYS:-3}d" >&2
         return 1
     fi
 
@@ -225,7 +225,7 @@ resolve_all() {
         source "${lpolicy}"
     fi
 
-    STABLE_SOAK_DAYS="${STABLE_SOAK_DAYS:-7}"
+    STABLE_SOAK_DAYS="${STABLE_SOAK_DAYS:-3}"
     if [[ ! "${STABLE_SOAK_DAYS}" =~ ^[0-9]+$ ]]; then
         echo "ERROR: STABLE_SOAK_DAYS='${STABLE_SOAK_DAYS}' must be a non-negative integer" >&2
         return 1

@@ -238,6 +238,16 @@ if ! command -v nfpm &>/dev/null; then
     exit 1
 fi
 
+# Check binutils tools used to strip and verify staged ELF files, and
+# dpkg-deb, which repacks every .deb at xz -9 (repack_deb_xz9)
+for required_tool in strip:binutils readelf:binutils dpkg-deb:dpkg; do
+    if ! command -v "${required_tool%%:*}" &> /dev/null; then
+        echo "ERROR: ${required_tool%%:*} is not installed or not in PATH." >&2
+        echo "  Install it: apt-get install ${required_tool#*:}" >&2
+        exit 1
+    fi
+done
+
 # Check nFPM config directory exists with YAML files
 if [[ ! -d "${NFPM_DIR}" ]]; then
     echo "ERROR: nFPM config directory not found: ${NFPM_DIR}" >&2
@@ -254,6 +264,46 @@ echo "DESTDIR:    ${DESTDIR}"
 echo "ARCH:       ${ARCH}"
 echo "nFPM dir:   ${NFPM_DIR}"
 echo "Output dir: ${OUTPUT_DIR}"
+echo ""
+
+# ============================================
+# Strip Staged Binaries
+# ============================================
+# Strip every staged ELF executable / shared object before nFPM, as Debian's
+# dh_strip does (symbols are dropped, no -dbgsym packages), then fail packaging
+# if any is still unstripped. Central, so it covers every component and any
+# future one regardless of its build system. Stripping leaves DT_NEEDED intact,
+# so detect_runtime_depends below is unaffected.
+#
+# The strip runs on a private copy of the staging tree, never on DESTDIR
+# itself: setup.sh runs as root, so the tree may be root-owned while packaging
+# runs as an unprivileged user who cannot rewrite those files. The copy is
+# also what nFPM packages from, and the caller's DESTDIR is left untouched.
+PACKAGING_ROOT="$(mktemp -d)"
+# Chain onto any EXIT trap already installed rather than replacing it.
+_prev_exit_trap="$(trap -p EXIT)"
+_prev_exit_cmd=""
+if [[ -n "${_prev_exit_trap}" ]]; then
+    _prev_exit_cmd="${_prev_exit_trap#trap -- }"
+    _prev_exit_cmd="${_prev_exit_cmd% EXIT}"
+    eval "_prev_exit_cmd=${_prev_exit_cmd}"
+fi
+cleanup_packaging_root() {
+    if [[ -n "${PACKAGING_ROOT:-}" && -d "${PACKAGING_ROOT}" ]]; then
+        rm -rf -- "${PACKAGING_ROOT}"
+    fi
+    if [[ -n "${_prev_exit_cmd}" ]]; then
+        eval "${_prev_exit_cmd}"
+    fi
+}
+trap cleanup_packaging_root EXIT
+echo ">>> Copying staging tree ${DESTDIR} to a private packaging copy"
+copy_staging_tree "${DESTDIR}" "${PACKAGING_ROOT}/destdir"
+DESTDIR="${PACKAGING_ROOT}/destdir"
+export DESTDIR
+echo ">>> Stripping staged binaries"
+strip_staged_binaries "${DESTDIR}"
+verify_binaries_stripped "${DESTDIR}"
 echo ""
 
 # ============================================
@@ -302,6 +352,31 @@ source "${toolpath}/scripts/component_maps.sh"
 # ============================================
 
 mkdir -p "${OUTPUT_DIR}"
+
+# build_deb <rendered-nfpm-config> -> run nFPM into an empty per-call dir, repack
+# the .deb it wrote at xz -9 (repack_deb_xz9: nFPM's xz has no level setting),
+# then move it into OUTPUT_DIR. The private dir makes sure only this run's
+# output is repacked, never a stale file already in OUTPUT_DIR.
+build_deb() {
+    local lconfig="$1"
+    local lstage ldeb
+    local -a ldebs
+    # Under PACKAGING_ROOT, so the EXIT cleanup removes it on any failure path.
+    lstage="$(mktemp -d "${PACKAGING_ROOT}/nfpm.XXXXXX")"
+    nfpm pkg \
+        --config "${lconfig}" \
+        --target "${lstage}/" \
+        --packager deb
+    ldebs=("${lstage}"/*.deb)
+    if [[ "${#ldebs[@]}" -ne 1 || ! -f "${ldebs[0]}" ]]; then
+        echo "ERROR: expected exactly one .deb from nFPM in ${lstage}" >&2
+        return 1
+    fi
+    ldeb="${ldebs[0]}"
+    repack_deb_xz9 "${ldeb}"
+    mv -f "${ldeb}" "${OUTPUT_DIR}/"
+    rmdir "${lstage}"
+}
 
 # ============================================
 # Package Components
@@ -423,10 +498,7 @@ for component in "${COMPONENTS[@]}"; do
         done
     fi
 
-    nfpm pkg \
-        --config "${nfpm_config}" \
-        --target "${OUTPUT_DIR}" \
-        --packager deb
+    build_deb "${nfpm_config}"
     rm -f "${nfpm_config}"
 
     echo ">>> Done: podman-${component}"
@@ -460,10 +532,7 @@ export DESTDIR="${DESTDIR}"
 suite_config="$(mktemp)"
 envsubst '${VERSION} ${ARCH} ${DESTDIR}' < "${NFPM_DIR}/suite.yaml" > "${suite_config}"
 
-nfpm pkg \
-    --config "${suite_config}" \
-    --target "${OUTPUT_DIR}" \
-    --packager deb
+build_deb "${suite_config}"
 rm -f "${suite_config}"
 
 echo ">>> Done: podman-suite"

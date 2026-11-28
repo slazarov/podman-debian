@@ -251,6 +251,266 @@ detect_runtime_depends() {
     printf '%s' "${out}" | sort -u
 }
 
+# ============================================
+# Binary Stripping (packaging stage)
+# ============================================
+# Debian's dh_strip equivalent, run once over the whole DESTDIR staging tree by
+# scripts/package_all.sh before nFPM. Debug symbols are dropped, not split: no
+# -dbgsym packages. Stripping centrally covers every component (Go, C, Rust,
+# meson) regardless of each upstream build system's own strip knobs.
+#
+# Only ELF executables / PIEs / shared objects (ELF Type EXEC or DYN) are
+# touched. Non-ELF files, ELF relocatables (.o, BPF objects), ar archives (.a)
+# and symlinks are left byte-identical. "Stripped" means no .symtab and no
+# .debug_* / .zdebug_* section in `readelf -S`.
+
+# _elf_is_strippable <file> -> 0 if <file> is an ELF EXEC or DYN object.
+_elf_is_strippable() {
+    local lfile="$1"
+    local lmagic lheader ltype
+    [[ -f "${lfile}" && ! -L "${lfile}" ]] || return 1
+    lmagic="$(LC_ALL=C head -c 4 "${lfile}" 2> /dev/null | LC_ALL=C tr -d '\0')" || return 1
+    [[ "${lmagic}" == $'\x7fELF' ]] || return 1
+    # Capture first, then parse: piping readelf into an early-exiting reader
+    # would SIGPIPE it and, under pipefail, misreport the result.
+    lheader="$(LC_ALL=C readelf -h "${lfile}" 2> /dev/null)" || return 1
+    ltype="$(awk '$1 == "Type:" {print $2; exit}' <<< "${lheader}")"
+    [[ "${ltype}" == "EXEC" || "${ltype}" == "DYN" ]]
+}
+
+# _elf_has_symbols <file> -> 0 if it still has .symtab or debug sections,
+# 1 if it is stripped, 2 if readelf cannot read its section headers.
+_elf_has_symbols() {
+    local lfile="$1"
+    local lsections
+    lsections="$(LC_ALL=C readelf -S -W "${lfile}" 2> /dev/null)" || return 2
+    if grep -Eq '[[:space:]]\.(symtab|z?debug_[^[:space:]]*)([[:space:]]|$)' <<< "${lsections}"; then
+        return 0
+    fi
+    return 1
+}
+
+# copy_staging_tree <src> <dest> -> copy the staging tree <src> into <dest>
+# (created if missing) so packaging can strip it without write access to
+# <src>. Modes, timestamps and symlinks are kept (symlinks are copied, not
+# followed); ownership is not, since a non-root packager cannot chown and
+# nFPM sets file owners itself. Directories in the copy get owner write so
+# strip can create its temporary file next to each binary; file modes are
+# left exactly as staged, because nFPM packages them.
+copy_staging_tree() {
+    local lsrc="$1" ldest="$2"
+    if [[ ! -d "${lsrc}" ]]; then
+        echo "ERROR: copy_staging_tree: not a directory: ${lsrc}" >&2
+        return 1
+    fi
+    if ! mkdir -p "${ldest}"; then
+        echo "ERROR: copy_staging_tree: cannot create ${ldest}" >&2
+        return 1
+    fi
+    if ! cp -R -P --preserve=mode,timestamps,links "${lsrc}/." "${ldest}/"; then
+        echo "ERROR: could not copy staging tree ${lsrc} to ${ldest}" >&2
+        return 1
+    fi
+    if ! find "${ldest}" -type d ! -perm -u=w -exec chmod u+w {} +; then
+        echo "ERROR: could not make directories under ${ldest} writable" >&2
+        return 1
+    fi
+}
+
+# strip_staged_binaries <dir> -> strip --strip-unneeded every unstripped ELF
+# EXEC/DYN file under <dir>, in place. Symlinks are not followed. Returns 1
+# (naming the file) on the first strip failure; an empty tree is a no-op.
+strip_staged_binaries() {
+    local ldir="$1"
+    local lfile lrc lmode lcount=0
+    if [[ ! -d "${ldir}" ]]; then
+        echo "ERROR: strip_staged_binaries: not a directory: ${ldir}" >&2
+        return 1
+    fi
+    while IFS= read -r -d '' lfile; do
+        _elf_is_strippable "${lfile}" || continue
+        lrc=0
+        _elf_has_symbols "${lfile}" || lrc=$?
+        [[ "${lrc}" -eq 1 ]] && continue
+        # A non-root strip cannot rewrite a file without owner write (e.g.
+        # 0555): add it for the strip, then restore the exact staged mode,
+        # which nFPM packages.
+        lmode=""
+        if [[ ! -w "${lfile}" ]]; then
+            if ! lmode="$(stat -c %a "${lfile}")" || ! chmod u+w "${lfile}"; then
+                echo "ERROR: cannot make ${lfile} writable to strip it" >&2
+                return 1
+            fi
+        fi
+        if ! strip --strip-unneeded "${lfile}"; then
+            [[ -n "${lmode}" ]] && chmod "${lmode}" "${lfile}"
+            echo "ERROR: strip failed: ${lfile}" >&2
+            return 1
+        fi
+        if [[ -n "${lmode}" ]] && ! chmod "${lmode}" "${lfile}"; then
+            echo "ERROR: cannot restore mode ${lmode} on ${lfile}" >&2
+            return 1
+        fi
+        lcount=$((lcount + 1))
+    done < <(find "${ldir}" -type f -print0 | LC_ALL=C sort -z)
+    echo "  Stripped ${lcount} ELF file(s) under ${ldir}"
+}
+
+# verify_binaries_stripped <dir> -> 0 if no ELF EXEC/DYN file under <dir>
+# still carries .symtab or debug sections; otherwise names each offender on
+# stderr and returns 1. An unreadable ELF counts as an offender.
+verify_binaries_stripped() {
+    local ldir="$1"
+    local lfile lrc lbad=0
+    if [[ ! -d "${ldir}" ]]; then
+        echo "ERROR: verify_binaries_stripped: not a directory: ${ldir}" >&2
+        return 1
+    fi
+    while IFS= read -r -d '' lfile; do
+        _elf_is_strippable "${lfile}" || continue
+        lrc=0
+        _elf_has_symbols "${lfile}" || lrc=$?
+        case "${lrc}" in
+            1) ;;
+            2)
+                echo "ERROR: cannot read ELF sections: ${lfile}" >&2
+                lbad=$((lbad + 1))
+                ;;
+            *)
+                echo "ERROR: unstripped ELF in staging tree: ${lfile}" >&2
+                lbad=$((lbad + 1))
+                ;;
+        esac
+    done < <(find "${ldir}" -type f -print0 | LC_ALL=C sort -z)
+    if [[ "${lbad}" -gt 0 ]]; then
+        echo "ERROR: ${lbad} staged ELF file(s) are not stripped" >&2
+        return 1
+    fi
+    return 0
+}
+
+# ============================================
+# .deb Repack (packaging stage)
+# ============================================
+# nFPM's built-in xz has no level setting and compresses far worse than
+# `xz -9`, whose 64 MiB dictionary also dedups code shared between binaries
+# (podman / podman-remote). package_all.sh therefore rebuilds every .deb it
+# just wrote with dpkg-deb at -9. The repack must not change the package: the
+# data listing (mode, owner, size, path, link target), the control fields and
+# every control member are compared before the original is replaced.
+
+# _deb_listing <deb> -> normalized `dpkg-deb -c` listing: mode, owner, size,
+# path and link target (no timestamps), sorted by path. The root entry "./" is
+# dropped (nFPM omits it, dpkg-deb -b always writes it; it is checked
+# separately). Symlink permission bits are reduced to "l": Linux ignores them,
+# nFPM stores 0000 and a symlink created on disk is always 0777.
+_deb_listing() {
+    local ldeb="$1"
+    local llisting
+    llisting="$(LC_ALL=C dpkg-deb -c "${ldeb}")" || return 1
+    awk 'NF == 0 {next}
+    {
+        mode = $1
+        if (substr(mode, 1, 1) == "l") mode = "l"
+        path = $6
+        for (i = 7; i <= NF; i++) path = path " " $i
+        if (path == "./") next
+        print path "\t" mode "\t" $2 "\t" $3
+    }' <<< "${llisting}" | LC_ALL=C sort
+}
+
+# _repack_deb_same <old> <new> -> 0 when <new> has the same contents and
+# control as <old> and a 0755 root/root root directory; else names the
+# difference on stderr and returns 1.
+_repack_deb_same() {
+    local lold="$1" lnew="$2"
+    local lold_list lnew_list lold_fields lnew_fields lctrl lrc lraw lroot
+    lold_list="$(_deb_listing "${lold}")" || return 1
+    lnew_list="$(_deb_listing "${lnew}")" || return 1
+    if [[ "${lold_list}" != "${lnew_list}" ]]; then
+        echo "ERROR: repacked file listing differs from the original" >&2
+        diff <(printf '%s\n' "${lold_list}") <(printf '%s\n' "${lnew_list}") >&2 || true
+        return 1
+    fi
+    lold_fields="$(dpkg-deb -f "${lold}")" || return 1
+    lnew_fields="$(dpkg-deb -f "${lnew}")" || return 1
+    if [[ "${lold_fields}" != "${lnew_fields}" ]]; then
+        echo "ERROR: repacked control fields differ from the original" >&2
+        return 1
+    fi
+    # Every control member (control, conffiles, md5sums, maintainer scripts,
+    # anything else), byte for byte.
+    lctrl="$(mktemp -d)" || return 1
+    lrc=0
+    if ! dpkg-deb -e "${lold}" "${lctrl}/old" || ! dpkg-deb -e "${lnew}" "${lctrl}/new"; then
+        echo "ERROR: cannot extract control members for comparison" >&2
+        lrc=1
+    elif ! diff -r "${lctrl}/old" "${lctrl}/new" >&2; then
+        echo "ERROR: repacked control members differ from the original" >&2
+        lrc=1
+    fi
+    rm -rf "${lctrl}"
+    [[ "${lrc}" -eq 0 ]] || return 1
+    # Capture first: an early-exiting awk would SIGPIPE dpkg-deb under pipefail.
+    lraw="$(LC_ALL=C dpkg-deb -c "${lnew}")" || return 1
+    lroot="$(awk '$6 == "./" {print $1 " " $2; exit}' <<< "${lraw}")"
+    if [[ "${lroot}" != "drwxr-xr-x root/root" ]]; then
+        echo "ERROR: repacked root directory is '${lroot}', expected 'drwxr-xr-x root/root'" >&2
+        return 1
+    fi
+    return 0
+}
+
+# repack_deb_xz9 <deb> -> rebuild <deb> in place with
+# `dpkg-deb --root-owner-group -Zxz -z9`, keeping its filename. The package is
+# unpacked into a mktemp -d dir, rebuilt beside the original and moved over it
+# only after _repack_deb_same passes. A repack that would be larger than the
+# original is discarded (success, original kept), so a package never grows.
+# On any failure the original is left untouched and 1 is returned, naming
+# the file.
+repack_deb_xz9() {
+    local ldeb="$1"
+    local lwork lnew lold_size lnew_size
+    if [[ ! -f "${ldeb}" ]]; then
+        echo "ERROR: repack_deb_xz9: no such .deb: ${ldeb}" >&2
+        return 1
+    fi
+    lwork="$(mktemp -d)" || return 1
+    lnew="${ldeb}.repack.tmp"
+    rm -f "${lnew}"
+    if ! dpkg-deb -R "${ldeb}" "${lwork}/root"; then
+        echo "ERROR: dpkg-deb could not unpack ${ldeb}" >&2
+        rm -rf "${lwork}"
+        return 1
+    fi
+    # The root and DEBIAN dirs come from mkdir, so their mode follows the
+    # umask; the package root must be 0755 whatever the umask is.
+    chmod 0755 "${lwork}/root" "${lwork}/root/DEBIAN"
+    if ! dpkg-deb --root-owner-group -Zxz -z9 -b "${lwork}/root" "${lnew}" > /dev/null; then
+        echo "ERROR: dpkg-deb could not rebuild ${ldeb}" >&2
+        rm -rf "${lwork}" "${lnew}"
+        return 1
+    fi
+    rm -rf "${lwork}"
+    if ! _repack_deb_same "${ldeb}" "${lnew}"; then
+        echo "ERROR: repack changed the contents of ${ldeb}; original kept" >&2
+        rm -f "${lnew}"
+        return 1
+    fi
+    chmod --reference="${ldeb}" "${lnew}"
+    lold_size="$(stat -c %s "${ldeb}")"
+    lnew_size="$(stat -c %s "${lnew}")"
+    # Never grow a package: for a near-empty .deb (podman-suite) the -9
+    # stream headers cost more than they save, so keep nFPM's output.
+    if [[ "${lnew_size}" -gt "${lold_size}" ]]; then
+        rm -f "${lnew}"
+        echo "  Kept $(basename "${ldeb}"): repack would grow it (${lold_size} -> ${lnew_size} bytes)"
+        return 0
+    fi
+    mv -f "${lnew}" "${ldeb}"
+    echo "  Repacked $(basename "${ldeb}"): ${lold_size} -> ${lnew_size} bytes"
+}
+
 # NOTE: config.sh is sourced at the END of this file (after all function definitions)
 # This is required because config.sh calls get_required_go_version(), get_required_rust_version(), etc.
 
@@ -324,6 +584,36 @@ get_latest_tag() {
     git tag --list --sort -creatordate | _rank_upstream_tags "" "" | head -n1
 }
 
+# _git_remote_retry <git args...> -- run `git <git args...>` that talks to a remote,
+# retrying a failure up to GIT_REMOTE_ATTEMPTS times (default 4), waiting
+# GIT_REMOTE_RETRY_DELAY seconds (default 3) times the attempt number in between.
+# Smaller upstream hosts (passt.top) drop a single ls-remote or fetch now and
+# then; the resolver makes several such calls per component and one dropped call
+# used to abort the whole track. A stalled transfer counts as a failure after
+# 30s below 1 KB/s instead of hanging. Only the successful attempt's stdout is
+# printed; git's stderr is discarded, as the callers did before. Returns git's
+# last exit code.
+_git_remote_retry() {
+    local lattempts="${GIT_REMOTE_ATTEMPTS:-4}"
+    local ldelay="${GIT_REMOTE_RETRY_DELAY:-3}"
+    local lattempt=1 lrc lout
+    while true; do
+        # Buffer stdout so a failed attempt's partial output is never emitted.
+        lrc=0
+        lout=$(git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=30 "$@" 2>/dev/null) || lrc=$?
+        if [[ "${lrc}" -eq 0 ]]; then
+            [[ -z "${lout}" ]] || printf '%s\n' "${lout}"
+            return 0
+        fi
+        if [[ "${lattempt}" -ge "${lattempts}" ]]; then
+            return "${lrc}"
+        fi
+        echo "  retrying git $* (rc=${lrc}, attempt ${lattempt} of ${lattempts})" >&2
+        sleep $((ldelay * lattempt))
+        lattempt=$((lattempt + 1))
+    done
+}
+
 # list_upstream_tags <repo-url> <component> [series] -- highest-version-first list of
 # an upstream repo's tags WITHOUT cloning (over `git ls-remote`), filtered/ranked by
 # _rank_upstream_tags. Returns non-zero (and prints nothing) if the remote yields no
@@ -333,7 +623,7 @@ list_upstream_tags() {
     local lcomponent="$2"
     local lseries="${3:-}"
     local lrefs
-    lrefs=$(git ls-remote --tags --refs "${lurl}" 2>/dev/null | awk '{print $2}' | sed 's|refs/tags/||') || return 1
+    lrefs=$(_git_remote_retry ls-remote --tags --refs "${lurl}" | awk '{print $2}' | sed 's|refs/tags/||') || return 1
     [[ -n "${lrefs}" ]] || return 1
     printf '%s\n' "${lrefs}" | _rank_upstream_tags "${lcomponent}" "${lseries}"
 }
@@ -349,7 +639,7 @@ tag_commit_epoch() {
     local ltmp lepoch=""
     ltmp=$(mktemp -d) || return 1
     if git init -q "${ltmp}" 2>/dev/null \
-       && git -C "${ltmp}" fetch -q --depth 1 "${lurl}" tag "${ltag}" 2>/dev/null; then
+       && _git_remote_retry -C "${ltmp}" fetch -q --depth 1 "${lurl}" tag "${ltag}"; then
         lepoch=$(git -C "${ltmp}" log -1 --format=%ct FETCH_HEAD 2>/dev/null) || lepoch=""
     fi
     rm -rf "${ltmp}"

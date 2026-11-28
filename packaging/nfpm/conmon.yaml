@@ -10,6 +10,8 @@ homepage: "https://github.com/containers/conmon"
 license: "Apache-2.0"
 section: admin
 priority: optional
+deb:
+  compression: xz
 
 # System-library depends are injected at build time. The injected
 # fragment carries its own `depends:` header so a fully-static binary (empty

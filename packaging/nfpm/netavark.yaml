@@ -10,6 +10,8 @@ homepage: "https://github.com/containers/netavark"
 license: "Apache-2.0"
 section: admin
 priority: optional
+deb:
+  compression: xz
 
 # nftables: netavark 2.x's only firewall driver. iptables: netavark 1.x (v5
 # track) is built with its upstream default driver, iptables, and fails with

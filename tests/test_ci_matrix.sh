@@ -141,7 +141,7 @@ assert_contains "DISTRO override is the matrix distro" "${NOCOMMENT}" "DISTRO=\$
 assert_contains "build checks version ordering" "${NOCOMMENT}" "./scripts/verify_versions.sh"
 assert_contains "publish downloads named distro artifacts" "${NOCOMMENT}" 'gh run download "${GITHUB_RUN_ID}" --name "debs-${distro}"'
 assert_true "publish never merges artifacts across distros" \
-    "$(printf '%s\n' "${NOCOMMENT}" | grep -q 'merge-multiple: true' && echo 0 || echo 1)"
+    "$(grep -q 'merge-multiple: true' <<< "${NOCOMMENT}" && echo 0 || echo 1)"
 assert_contains "publish runs ci_publish.sh per selected distro" "${NOCOMMENT}" '"artifacts/debs-${distro}" "${REPO_URL}" "repo-output"'
 assert_contains "publish selects distros from cell conclusions" "${NOCOMMENT}" 'published_distros "${RUNNER_TEMP}/cells.txt" artifacts'
 assert_contains "publish reads the latest cell conclusions of the whole run" "${NOCOMMENT}" '/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest'
@@ -149,45 +149,54 @@ assert_contains "build cells are named by distro" "${NOCOMMENT}" 'name: build-${
 assert_contains "publish refuses to deploy when nothing published" "${NOCOMMENT}" 'refusing to deploy'
 assert_contains "smoke test runs per distro" "${NOCOMMENT}" './scripts/smoke_repo_install.sh "${distro}"'
 assert_true "publish never continues past a failed download" \
-    "$(printf '%s\n' "${NOCOMMENT}" | grep -q 'continue-on-error' && echo 0 || echo 1)"
+    "$(grep -q 'continue-on-error' <<< "${NOCOMMENT}" && echo 0 || echo 1)"
 assert_contains "integrity gate checks signatures" "${NOCOMMENT}" 'verify_repo_integrity.sh --keyring'
 assert_contains "propagation is checked after deploy" "${NOCOMMENT}" 'wait_for_propagation "${REPO_URL}"'
+assert_contains "publish waits for the Pages artifact to be listed" "${NOCOMMENT}" \
+    'wait_for_run_artifact "${GITHUB_REPOSITORY}" "${GITHUB_RUN_ID}" github-pages'
+upload_line="$(grep -n 'uses: actions/upload-pages-artifact@' <<< "${NOCOMMENT}" | head -n 1 | cut -d: -f1)"
+wait_line="$(grep -n 'wait_for_run_artifact ' <<< "${NOCOMMENT}" | head -n 1 | cut -d: -f1)"
+deploy_line="$(grep -n 'uses: actions/deploy-pages@' <<< "${NOCOMMENT}" | head -n 1 | cut -d: -f1)"
+assert_true "the artifact wait runs after upload-pages-artifact and before deploy-pages" \
+    "$([[ -n "${upload_line}" && -n "${wait_line}" && -n "${deploy_line}" && "${upload_line}" -lt "${wait_line}" && "${wait_line}" -lt "${deploy_line}" ]] && echo 1 || echo 0)"
+wait_step="$(sed -n '/- name: Wait for the Pages artifact to be listed/,/wait_for_run_artifact /p' <<< "${NOCOMMENT}")"
+assert_contains "the artifact wait has a token for gh" "${wait_step}" 'GH_TOKEN: ${{ github.token }}'
 assert_equals "the resolver runs exactly once (resolve-track)" "1" \
-    "$(printf '%s\n' "${NOCOMMENT}" | grep -c 'resolve_track_versions\|resolve_versions.sh')"
+    "$(grep -c 'resolve_track_versions\|resolve_versions.sh' <<< "${NOCOMMENT}")"
 assert_contains "workflow runs queue per track" "${NOCOMMENT}" 'group: build-packages-${{'
 assert_contains "publish has its own deploy queue" "${NOCOMMENT}" 'group: pages-deploy'
 assert_equals "both concurrency groups use queue: max" "2" \
-    "$(printf '%s\n' "${NOCOMMENT}" | grep -cE '^[[:space:]]*queue: max$')"
+    "$(grep -cE '^[[:space:]]*queue: max$' <<< "${NOCOMMENT}")"
 assert_true "no concurrency group cancels in-progress runs" \
-    "$(printf '%s\n' "${NOCOMMENT}" | grep -q 'cancel-in-progress: true' && echo 0 || echo 1)"
+    "$(grep -q 'cancel-in-progress: true' <<< "${NOCOMMENT}" && echo 0 || echo 1)"
 assert_equals "every checkout drops its credentials" \
-    "$(printf '%s\n' "${NOCOMMENT_ALL}" | grep -c 'actions/checkout@')" \
-    "$(printf '%s\n' "${NOCOMMENT_ALL}" | grep -c 'persist-credentials: false')"
+    "$(grep -c 'actions/checkout@' <<< "${NOCOMMENT_ALL}")" \
+    "$(grep -c 'persist-credentials: false' <<< "${NOCOMMENT_ALL}")"
 assert_contains "compiler cache key" "${NOCOMMENT}" 'key: cc-v1-${{ matrix.distro }}-amd64-${{ steps.track.outputs.track }}-rust${{ steps.env.outputs.rust }}-sccache${{ steps.env.outputs.sccache }}-${{ github.run_id }}'
 assert_contains "compiler caches enabled and strict" "${NOCOMMENT}" 'SCCACHE_ENABLED=true CCACHE_ENABLED=true CACHE_STRICT=true'
 assert_contains "compiler cache use is checked" "${NOCOMMENT}" 'compiler_cache_report'
 assert_contains "ccache counters are zeroed before the build" "${NOCOMMENT}" 'ccache --zero-stats'
 assert_contains "compiler cache is saved only when it changed" "${NOCOMMENT}" "if: steps.ccreport.outputs.changed == 'true'"
 assert_true "the compiler cache is not saved on every run by actions/cache" \
-    "$(printf '%s\n' "${NOCOMMENT}" | grep -B3 '~/.cache/sccache' | grep -q 'uses: actions/cache@' && echo 0 || echo 1)"
+    "$(grep -B3 '~/.cache/sccache' <<< "${NOCOMMENT}" | grep 'uses: actions/cache@' > /dev/null && echo 0 || echo 1)"
 assert_contains "build cells record nightly revisions" "${NOCOMMENT}" 'nightly_record_revisions build'
 assert_contains "lint installs the integration test tools" "$(grep -v '^[[:space:]]*#' "${LINT_WORKFLOW}")" 'reprepro gnupg gpgv dpkg-dev'
 assert_contains "lint makes integration skips fail" "$(grep -v '^[[:space:]]*#' "${LINT_WORKFLOW}")" "REQUIRE_INTEGRATION_DEPS: '1'"
 assert_contains "ci_publish.sh invoked" "${NOCOMMENT}" "ci_publish.sh"
 
-runs_on="$(printf '%s\n' "${NOCOMMENT}" | grep -E '^[[:space:]]*runs-on:' | sed 's/.*runs-on:[[:space:]]*//' | sort -u | tr '\n' ' ')"
+runs_on="$(grep -E '^[[:space:]]*runs-on:' <<< "${NOCOMMENT}" | sed 's/.*runs-on:[[:space:]]*//' | sort -u | tr '\n' ' ')"
 assert_equals "every job runs on one GitHub-hosted runner label" "1" \
     "$(printf '%s\n' "${runs_on}" | wc -w | tr -d ' ')"
-containers="$(printf '%s\n' "${NOCOMMENT_ALL}" | grep -E '^[[:space:]]*container:' | sed 's/.*container:[[:space:]]*//' | sort -u)"
+containers="$(grep -E '^[[:space:]]*container:' <<< "${NOCOMMENT_ALL}" | sed 's/.*container:[[:space:]]*//' | sort -u)"
 assert_equals "the only job container is the matrix container" "\${{ matrix.container }}" "${containers}"
 assert_true "no apt sources rewriting (no mirror swaps)" \
-    "$(printf '%s\n' "${NOCOMMENT_ALL}" | grep -qE 'sed -i[^|]*sources|sources\.list' && echo 0 || echo 1)"
+    "$(grep -qE 'sed -i[^|]*sources|sources\.list' <<< "${NOCOMMENT_ALL}" && echo 0 || echo 1)"
 assert_true "no arm64 / arm runners anywhere" \
-    "$(printf '%s\n' "${NOCOMMENT_ALL}" | grep -qiE 'arm64|aarch64|-arm\b' && echo 0 || echo 1)"
+    "$(grep -qiE 'arm64|aarch64|-arm\b' <<< "${NOCOMMENT_ALL}" && echo 0 || echo 1)"
 assert_true "no hard-coded distro labels in the build workflow" \
-    "$(printf '%s\n' "${NOCOMMENT}" | grep -qE 'bookworm|trixie' && echo 0 || echo 1)"
+    "$(grep -qE 'bookworm|trixie' <<< "${NOCOMMENT}" && echo 0 || echo 1)"
 
-ncron="$(printf '%s\n' "${NOCOMMENT}" | grep -cE "cron: '37 [456] \* \* \*'")"
+ncron="$(grep -cE "cron: '37 [456] \* \* \*'" <<< "${NOCOMMENT}")"
 assert_equals "three schedule crons (37 4/5/6)" "3" "${ncron}"
 assert_contains "dispatch build_track offers v5" "${NOCOMMENT}" "- v5"
 

@@ -2,8 +2,8 @@
 
 # Tests for scripts/ci_helpers.sh: fetch classification and retries, the
 # resolved-environment validator, the nightly revision checkpoint (record,
-# detect, merge), build cell selection, deploy propagation and the compiler
-# cache statistics parsers.
+# detect, merge), build cell selection, deploy propagation, the Pages artifact
+# wait and the compiler cache statistics parsers.
 #
 # fetch_url runs against tests/lib/mock_http_server.py, which injects HTTP
 # errors and cut-off bodies. Needs python3, curl and git; prints SKIP
@@ -301,6 +301,48 @@ cp "${OUT}/dists/nightly-bookworm/InRelease" "${LIVE}/dists/nightly-bookworm/InR
 rc=0
 PROPAGATION_ATTEMPTS=2 PROPAGATION_DELAY=0 wait_for_propagation "file://${LIVE}" "${OUT}" nightly-bookworm 2>/dev/null || rc=$?
 assert_equals "live InRelease matches -> 0" "0" "${rc}"
+
+# ============================================
+echo "=== wait_for_run_artifact (stub gh) ==="
+# ============================================
+
+# Stub gh: answer the Nth call with the Nth word of GH_STUB_ANSWERS. A number
+# is printed as total_count; "fail" makes the call exit 1. Calls are logged.
+GH_STUB_DIR="${TMP}/ghstub"
+mkdir -p "${GH_STUB_DIR}"
+cat > "${GH_STUB_DIR}/gh" << 'STUB'
+#!/bin/bash
+n=$(( $(cat "${GH_STUB_STATE}" 2> /dev/null || echo 0) + 1 ))
+echo "${n}" > "${GH_STUB_STATE}"
+echo "$*" >> "${GH_STUB_LOG}"
+read -r -a answers <<< "${GH_STUB_ANSWERS}"
+a="${answers[$((n - 1))]:-0}"
+[[ "${a}" == "fail" ]] && exit 1
+echo "${a}"
+STUB
+chmod +x "${GH_STUB_DIR}/gh"
+
+# wfra <answers> [attempts] -> "<rc> <calls>"
+wfra() {
+    local lrc=0
+    export GH_STUB_STATE="${TMP}/ghstub.state" GH_STUB_LOG="${TMP}/ghstub.log" GH_STUB_ANSWERS="$1"
+    rm -f "${GH_STUB_STATE}" "${GH_STUB_LOG}"
+    PATH="${GH_STUB_DIR}:${PATH}" ARTIFACT_ATTEMPTS="${2:-3}" ARTIFACT_DELAY=0 \
+        wait_for_run_artifact owner/repo 12345 github-pages 2> /dev/null || lrc=$?
+    echo "${lrc} $(cat "${GH_STUB_STATE}" 2> /dev/null || echo 0)"
+}
+assert_equals "listed at once -> 0 after 1 call" "0 1" "$(wfra "1")"
+assert_equals "listed on the 3rd poll -> 0 after 3 calls" "0 3" "$(wfra "0 0 1")"
+assert_equals "gh failures count as not listed yet" "0 3" "$(wfra "fail fail 1")"
+assert_equals "never listed -> 1 after all attempts" "1 3" "$(wfra "0 0 0 1")"
+assert_equals "non-numeric answer is not listed" "1 2" "$(wfra "null null" 2)"
+wfra "1" > /dev/null
+assert_equals "queries the run's artifacts filtered by name" \
+    "api repos/owner/repo/actions/runs/12345/artifacts?name=github-pages --jq .total_count" \
+    "$(cat "${TMP}/ghstub.log")"
+rc=0
+wait_for_run_artifact owner/repo "" github-pages 2> /dev/null || rc=$?
+assert_equals "missing run id -> 1" "1" "${rc}"
 
 # ============================================
 echo "=== resolve_track_versions (stub resolver) ==="

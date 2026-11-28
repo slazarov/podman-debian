@@ -79,7 +79,7 @@ COMPONENT_ROWS=(
     "skopeo|podman-skopeo|SKOPEO_TAG|https://github.com/containers/skopeo.git"
     "toolbox|podman-toolbx|TOOLBOX_TAG|https://github.com/containers/toolbox.git"
     "container-configs|podman-container-configs|CONTAINER_LIBS_TAG|https://github.com/containers/container-libs.git"
-    "pasta|podman-pasta|PASTA_TAG|git://passt.top/passt"
+    "pasta|podman-pasta|PASTA_TAG|https://passt.top/passt"
 )
 
 
