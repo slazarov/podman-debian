@@ -44,5 +44,7 @@ Notable changes to this project are recorded here, in the format of [Keep a Chan
 - The integrity gate fails on a `Release` without `Suite`, `Codename`, a `SHA256` section or a `Packages` entry per architecture, and on a `Packages` stanza without `Size` or `SHA256`.
 - The README's example `.sources` block used `stable-bookworm` while the text told Debian 13 users to pick `stable-trixie`. It now fills in the suite from `/etc/os-release`, and so do the track-switch examples in the README and `docs/apt-repository.md`, which hard-coded `stable-bookworm`.
 - The smoke test reads the assembled repository with `Signed-By` instead of `Trusted: yes`, fails on a network error while probing the live repository instead of skipping the upgrade scenario, and checks the installed versions after the upgrade.
+- `toolbox` failed to start on the host with "cannot execute: required file not found". Upstream links it with its dynamic loader under `/run/host` so the binary also runs inside toolbox containers, and relies on `tmpfiles.d/toolbox.conf` to link `/run/host` to `/` on the host. `podman-toolbx` now ships that file and applies it in its `postinst`, as Debian's own `podman-toolbox` does.
+- `podman-fuse-overlayfs` declared no dependencies, because the binary is linked statically and library detection finds nothing. It now depends on `fuse3` for `fusermount3`, as Debian's `fuse-overlayfs` does.
 
 [Unreleased]: https://github.com/slazarov/podman-debian/commits/main

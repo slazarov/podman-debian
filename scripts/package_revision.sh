@@ -13,5 +13,7 @@
 #
 # History: 1 = initial; 2 = podman-podman Recommends dbus-user-session;
 # 3 = shipped ELF binaries stripped (package_all.sh) and .debs xz-compressed,
-# to fit the GitHub Pages size limit.
-export PACKAGE_REVISION="${PACKAGE_REVISION:-3}"
+# to fit the GitHub Pages size limit; 4 = podman-toolbx ships
+# tmpfiles.d/toolbox.conf (/run/host link) with a postinst applying it,
+# podman-fuse-overlayfs Depends fuse3.
+export PACKAGE_REVISION="${PACKAGE_REVISION:-4}"

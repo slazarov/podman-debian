@@ -46,7 +46,19 @@ contents:
   # added in later toolbox versions -- add glob entries when available.
   - src: "${DESTDIR}/usr/share/bash-completion/completions/toolbox*"
     dst: /usr/share/bash-completion/completions/
+  # tmpfiles: links /run/host to / on the host. toolbox's dynamic loader is
+  # /run/host/usr/lib/.../ld-linux-*.so (so the binary also runs inside toolbox
+  # containers); without this link toolbox cannot start on the host
+  # ("cannot execute: required file not found").
+  - src: "${DESTDIR}/usr/lib/tmpfiles.d/toolbox.conf"
+    dst: /usr/lib/tmpfiles.d/toolbox.conf
+    file_info:
+      mode: 0644
   # Toolbox profile scripts
   - src: "${DESTDIR}/usr/share/toolbox/"
     dst: /usr/share/toolbox/
     type: tree
+
+# Apply toolbox.conf at install time, so /run/host exists without a reboot.
+scripts:
+  postinstall: "${NFPM_DIR}/scripts/toolbx-postinst.sh"

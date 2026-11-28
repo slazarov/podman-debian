@@ -216,13 +216,14 @@ render_one() {
     local yaml="$1" comp="$2" detected_fragment="$3"
     local rendered="${tmp_render_dir}/nfpm-${comp}.yaml"
 
-    # Mirror package_all.sh: export the same four vars and allowlist them.
+    # Mirror package_all.sh: export the same five vars and allowlist them.
     export VERSION="0.0.0~deb${DISTRO_VERSION_ID}.podman1"
     export ARCH="${ARCH}"
     export DESTDIR="${DESTDIR}"
     export DETECTED_DEPENDS="${detected_fragment}"
+    export NFPM_DIR
 
-    envsubst '${VERSION} ${ARCH} ${DESTDIR} ${DETECTED_DEPENDS}' < "${yaml}" > "${rendered}"
+    envsubst '${VERSION} ${ARCH} ${DESTDIR} ${DETECTED_DEPENDS} ${NFPM_DIR}' < "${yaml}" > "${rendered}"
 
     # `nfpm pkg` parses+validates the config; a YAML error or garbled depends
     # block makes it exit non-zero. Target a throwaway dir.
