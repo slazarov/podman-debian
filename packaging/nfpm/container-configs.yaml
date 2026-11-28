@@ -10,6 +10,8 @@ homepage: "https://github.com/containers/container-libs"
 license: "Apache-2.0"
 section: admin
 priority: optional
+deb:
+  compression: xz
 
 # Debian splits these files across two packages: golang-github-containers-image
 # owns /etc/containers/registries.conf, -common owns the rest. Missing either

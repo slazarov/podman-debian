@@ -10,6 +10,8 @@ homepage: "https://github.com/containers/aardvark-dns"
 license: "Apache-2.0"
 section: admin
 priority: optional
+deb:
+  compression: xz
 
 conflicts:
   - aardvark-dns

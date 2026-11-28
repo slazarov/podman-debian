@@ -10,6 +10,8 @@ homepage: "https://github.com/containers/buildah"
 license: "Apache-2.0"
 section: admin
 priority: optional
+deb:
+  compression: xz
 
 depends:
   - podman-container-configs

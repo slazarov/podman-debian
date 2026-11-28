@@ -10,7 +10,7 @@ There are three tracks. Each one is published per Debian release as a suite name
 | v5 | `v5-bookworm` | `v5-trixie` | Podman 5.x, for hosts not ready for the [Podman 6.0 changes](https://github.com/containers/podman/releases) (notably netavark 2.0). |
 | nightly | `nightly-bookworm` | `nightly-trixie` | Upstream main branch, built daily. Newest code, least tested. |
 
-The stable and v5 tracks pick up a new upstream release once it has been public for a soak period (7 days by default).
+The stable and v5 tracks pick up a new upstream release once it has been public for a soak period (3 days by default).
 
 Debian testing and unstable are not supported. There are no suites for them.
 

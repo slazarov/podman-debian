@@ -19,6 +19,7 @@
 #   nightly_merge_revisions    fold built revisions into the checkpoint
 #   published_distros          pick the distros whose build cell succeeded
 #   wait_for_propagation       wait until the live site serves the new InRelease
+#   wait_for_run_artifact      wait until a run's artifact list shows an artifact
 #   probe_live_suite           decide whether the smoke upgrade scenario can run
 #   check_upgraded_versions    check installed packages against the assembled index
 #   compiler_cache_report      print sccache/ccache statistics and check use
@@ -513,6 +514,44 @@ wait_for_propagation() {
         echo "  ${lsuite}: live InRelease matches the deployed one" >&2
     done
     rm -f "${ltmp}"
+}
+
+# ============================================
+# wait_for_run_artifact
+# ============================================
+#
+# wait_for_run_artifact <owner/repo> <run-id> <artifact-name>
+#
+# Polls the workflow run's artifact list (GET .../actions/runs/<id>/artifacts,
+# the list actions/deploy-pages reads) until it shows <artifact-name>. Right
+# after upload-pages-artifact finishes, that list can lag by a few seconds;
+# deploy-pages then fails with 'No artifacts named "github-pages" were found'
+# although the upload worked. Up to ARTIFACT_ATTEMPTS polls (default 12),
+# ARTIFACT_DELAY seconds apart (default 5). A failed `gh api` call counts as
+# "not listed yet". Needs `gh` with a token that has actions: read.
+# Returns 0 once listed, 1 if it never shows up or the arguments are missing.
+wait_for_run_artifact() {
+    local lrepo="$1" lrun="$2" lname="$3"
+    local lattempts="${ARTIFACT_ATTEMPTS:-12}"
+    local ldelay="${ARTIFACT_DELAY:-5}"
+    local lattempt lcount
+
+    if [[ -z "${lrepo}" || -z "${lrun}" || -z "${lname}" ]]; then
+        echo "ERROR: wait_for_run_artifact needs <owner/repo> <run-id> <artifact-name>" >&2
+        return 1
+    fi
+    for ((lattempt = 1; lattempt <= lattempts; lattempt++)); do
+        lcount="$(gh api "repos/${lrepo}/actions/runs/${lrun}/artifacts?name=${lname}" \
+            --jq '.total_count' 2> /dev/null)" || lcount=""
+        if [[ "${lcount}" =~ ^[0-9]+$ && "${lcount}" -gt 0 ]]; then
+            echo "  artifact ${lname} is listed for run ${lrun} (attempt ${lattempt} of ${lattempts})" >&2
+            return 0
+        fi
+        echo "  artifact ${lname} not listed for run ${lrun} yet (attempt ${lattempt} of ${lattempts})" >&2
+        [[ "${lattempt}" -lt "${lattempts}" ]] && sleep "${ldelay}"
+    done
+    echo "ERROR: artifact ${lname} never appeared in the artifact list of run ${lrun}" >&2
+    return 1
 }
 
 # ============================================

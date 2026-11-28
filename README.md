@@ -172,7 +172,7 @@ This removes the components installed from source.
 
 ### How versions are chosen
 
-Versions are not pinned by hand. [`scripts/resolve_versions.sh`](scripts/resolve_versions.sh) reads a policy file ([`versions-stable.env`](versions-stable.env) or [`versions-v5.env`](versions-v5.env)) with a series cap per component and a soak period: a new upstream tag is used only after its commit is at least `STABLE_SOAK_DAYS` days old (default 7). Buildah's version is taken from Podman's `go.mod`. The nightly track builds upstream HEAD. The versions currently published are listed on the [repository page](https://slazarov.github.io/podman-debian/).
+Versions are not pinned by hand. [`scripts/resolve_versions.sh`](scripts/resolve_versions.sh) reads a policy file ([`versions-stable.env`](versions-stable.env) or [`versions-v5.env`](versions-v5.env)) with a series cap per component and a soak period: a new upstream tag is used only after its commit is at least `STABLE_SOAK_DAYS` days old (default 3). Buildah's version is taken from Podman's `go.mod`. The nightly track builds upstream HEAD. The versions currently published are listed on the [repository page](https://slazarov.github.io/podman-debian/).
 
 Package versions carry a per-release suffix, `~deb12.podmanN` on bookworm and `~deb13.podmanN` on trixie, where `N` is the packaging revision. Nightly versions look like `5.9.0~~git20260306.abc1234~deb13.podman1`, which sorts below the tagged release of the same version.
 

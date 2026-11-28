@@ -23,7 +23,7 @@ cd "${BUILD_ROOT}" || exit
 log_build_output "pasta"
 
 step_start "Cloning repository"
-git_clone_update git://passt.top/passt passt
+git_clone_update https://passt.top/passt passt
 cd "${BUILD_ROOT}/passt"
 step_done
 

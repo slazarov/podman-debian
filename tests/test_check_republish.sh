@@ -37,6 +37,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Nothing here should reach a remote, but never sleep between git retries.
+export GIT_REMOTE_RETRY_DELAY=0
+
 # Source the helpers (BASH_SOURCE guard prevents main from running).
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/scripts/check_republish_needed.sh"
@@ -77,6 +80,13 @@ assert_equals "distros come from config.sh" "bookworm trixie" "${VALID_DISTROS[*
 assert_equals "bookworm VERSION_ID" "12" "${DISTRO_VERSION_IDS[bookworm]}"
 assert_equals "trixie VERSION_ID" "13" "${DISTRO_VERSION_IDS[trixie]}"
 assert_equals "default repo URL" "https://slazarov.github.io/podman-debian" "${REPO_URL_DEFAULT}"
+
+echo "=== upstream URLs ==="
+assert_equals "guard records passt over https" \
+    "pasta|podman-pasta|PASTA_TAG|https://passt.top/passt" \
+    "$(printf '%s\n' "${COMPONENT_ROWS[@]}" | grep '^pasta|')"
+assert_equals "no git:// URL in the guard rows" "0" \
+    "$(printf '%s\n' "${COMPONENT_ROWS[@]}" | grep -c 'git://' || true)"
 
 assert_equals "podman-suite follows podman's base" "6.0.1" "$(extract_base 'v6.0.1' 'podman-suite')"
 
