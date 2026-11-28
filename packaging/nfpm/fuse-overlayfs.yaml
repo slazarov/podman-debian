@@ -13,6 +13,15 @@ priority: optional
 deb:
   compression: xz
 
+depends:
+  # fusermount3, which fuse-overlayfs runs to unmount (as Debian's own
+  # fuse-overlayfs package declares). The binary is linked statically, so
+  # library detection finds nothing to add.
+  - fuse3
+  # System libraries detected from the binary and injected at build time
+  # (empty for the usual static build).
+${DETECTED_DEPENDS}
+
 conflicts:
   - fuse-overlayfs
 
